@@ -1,0 +1,279 @@
+# Airport Investment Intelligence Agent: Plan v2
+
+Deloitte Digital, Forward Deployed Engineer home assignment. Deadline: Sunday, Oct 18, 2026. Submission: public GitHub repo.
+This file is the single source of truth. Copy sections 2–8 into the repo's `CLAUDE.md`.
+
+---
+
+## 1. Thesis
+
+> **A terminal investment pays back per passenger. Good opportunity = many passengers + growing demand + demand already pressing on capacity + nothing blocks expansion.**
+
+Every KPI must feed one of those four parts. If it doesn't, cut it.
+
+**The key insight that shapes the design:** more terminal does not mean more flights. Some airports are limited by their terminal, some by their runways, and some by law. The agent ranks the opportunity **and** names the binding constraint. That is what makes the recommendation actionable.
+
+---
+
+## 2. Non-negotiable principles
+
+1. **Python computes, the LLM narrates.** The model never calculates a number. Every number comes from a tool result.
+2. **Every claim is tagged** with one of three labels:
+   - `[data: source]`: a number from an API.
+   - `[domain: KB-id]`: context from the knowledge base.
+   - `[assumption: A-xx]`: a choice we made.
+3. **Source routing is deterministic.** Code picks the data source from the question's time period. The LLM does not choose.
+4. **No silent gaps.** If the data can't answer the question, the agent says so and offers the nearest answer it can support.
+5. **Everything changeable lives in files.** Weights and thresholds go in `config.yaml`. Facts go in `kb/constraints.yaml`. Judgment calls go in `kb/assumptions.yaml`. Users and admins can read, challenge, and edit all three.
+
+---
+
+## 3. Scoring
+
+### Opportunity Score (0–100)
+```
+score = 0.35 × Growth + 0.35 × Capacity Pressure + 0.30 × Scale
+```
+
+| Component | Built from | Source |
+|---|---|---|
+| Growth | Average of two percentiles: latest 12 months vs 2019 (recovery), and CAGR from 2022 to latest (momentum) | T-100 |
+| Capacity Pressure | Average of two percentiles: load factor, and the trend in seats per departure (up-gauging) | T-100 |
+| Scale | Percentile of annual enplanements | T-100 |
+
+- **Normalization:** each metric becomes a percentile within its **national** peer group (FAA hub class: large, medium, small, non-hub). Only after that do we filter by region.
+  - Why: New England alone has too few airports to rank against each other.
+  - Why percentile and not min-max: one giant airport (ATL) does not squash everyone else.
+- **No log of scale.** A percentile depends only on rank order, and log never changes rank order, so the log would be redundant.
+- **Two lenses:**
+  - *Absolute*: the default weights.
+  - *Pressure*: Scale weight = 0, Growth and Pressure 0.5 each. This surfaces mid-size airports that are running out of room.
+- **What-if weights from chat.** The weights apply to that session only. Code validates them (non-negative, normalized to 1). Every answer prints the weights it used.
+- **Congestion is not in the score.** It feeds the constraint label below.
+
+### Binding Constraint label (rules in code, thresholds in config)
+
+Rules are checked in this order. The first one that matches wins.
+
+| Label | Rule | Meaning for the investor |
+|---|---|---|
+| **Regulatory** | A hard cap or curfew exists in `constraints.yaml` **and** utilization ≥ 85% of the cap | Money can't unlock it. Watch the legal or political timeline. |
+| **Airfield** | Departures per runway ≥ p75 of peer group, **or** NAS delay share ≥ p75 (if that data is available), **or** the constraint signature fires (hypothesis A-09) | A terminal adds no flights. The lever is gauge: widebody gates and bigger holdrooms. |
+| **Terminal** | Growth ≥ p60 **and** Pressure ≥ p60, and neither rule above fires | Best case for terminal capex. |
+| **None evident** | Otherwise | Demand isn't pressing on capacity yet. |
+
+### Flags (shown next to the score, never inside it)
+- **Low confidence:** non-hub airports, highly seasonal airports, or missing months of data.
+- **ULCC share high:** ultra-low-cost carriers run high load factors by design, which inflates the pressure signal.
+  - Depends on airport × carrier data. **To verify in Phase 0.**
+- **Live disruption:** an active FAA Ground Delay Program or ground stop right now.
+
+---
+
+## 4. Data sources
+
+| Source | Access | Status | Used for |
+|---|---|---|---|
+| BTS T-100 Segment Summary by Origin Airport | Socrata REST, `data.bts.gov` id `r495-tyji`, no key | ✅ Verified live | Departures, passengers, seats, load factor, seats per flight, domestic vs outbound international, average distance. Monthly. |
+| FAA NAS Status | REST, `nasstatus.faa.gov`, no key | ✅ Exists | Live delays, GDPs, ground stops, active runway configuration, arrival rate |
+| OpenSky Network | REST, free account (OAuth client credentials) | ✅ Exists | Departures by airport with estimated destination. **Max 7-day window per request.** Not for historical queries. |
+| OurAirports | CSV over HTTP | ✅ Open | State, coordinates, runway count. Used for region filtering, distances, departures per runway. |
+| TranStats T-100 route-level (origin × destination × carrier) | Bulk download | ⚠️ **Phase 0: can code fetch it at runtime?** | Annual and seasonal route mix (Q3), ULCC share |
+| TranStats delay causes (carrier × airport × month) | Bulk download | ⚠️ **Phase 0: same check** | NAS delay share. If unavailable, the Airfield rule runs without it. |
+| `kb/constraints.yaml` | Curated by hand, every entry sourced | Build | Legal caps, curfews, runway geometry, FAA schedule levels |
+
+**Runtime model:** live API calls with a local TTL cache. The cache exists for speed, not as a substitute for the APIs. Aggregation happens server-side with SoQL (sums grouped by year), so we never pull millions of rows.
+
+**Known gaps. State them in the doc and in answers.**
+- No public gate counts or terminal square footage. The agent can say "demand is pressing", never "the terminal is full".
+- No live route-level API.
+- T-100 is published with a lag of a few months. "Latest" means the latest 12 published months.
+- No public fares data in scope.
+
+### Period → source routing (Q3 and any route-mix question)
+
+| User asks about | Source |
+|---|---|
+| Last 7 days | OpenSky |
+| A month, a season, or a year | TranStats route-level, if Phase 0 confirms it. Otherwise T-100 summary as an approximation (international share + average distance), stated explicitly. |
+| A specific past day, or anything not covered | Say it isn't supported, and offer the nearest supported period |
+
+---
+
+## 5. Knowledge base (`kb/`)
+
+Two files, both human-editable and both versioned in git. The agent cites entry IDs in its answers.
+
+**`constraints.yaml`: facts about airports.**
+Each entry has: `id`, `airport`, `type` (cap / curfew / runway / schedule-level), `statement`, `value`, `source_url`, `verified_on`, `confidence`.
+
+**`assumptions.yaml`: judgment calls.**
+Each entry has: `id`, `statement`, `value`, `why`, `alternatives_considered`, `sensitivity` (what changes if it's wrong), `owner`, `last_reviewed`.
+
+### Initial assumptions register
+
+| ID | Assumption | Why |
+|---|---|---|
+| A-01 | Weights 0.35 / 0.35 / 0.30 | Growth and pressure are the thesis. Scale matters because payback is per passenger, but size alone isn't opportunity. |
+| A-02 | Peer groups = FAA hub class, computed from each airport's share of national enplanements | Comparing BOS to Burlington is meaningless. **Verify FAA thresholds.** |
+| A-03 | Universe = FAA primary airports (>10k enplanements per year) | Below that, data is noise |
+| A-04 | Growth = latest 12 months vs 2019, plus CAGR from 2022 | A plain 3–5 year CAGR is distorted by COVID |
+| A-05 | Long-haul = over 4,000 km great-circle distance (Eurocontrol) | No single industry standard exists; this one is citable. The EU's 3,500 km is shown as a sensitivity check. |
+| A-06 | Route mix counts passenger flights only by default; cargo is shown separately. Cargo is identified by an operator callsign list in config. | The client invests in passenger terminals. ANC cargo would distort the answer. |
+| A-07 | Total passengers ≈ enplanements × 2 | Legal caps count everyone passing through; T-100 counts only boarding passengers |
+| A-08 | "LA" = LAX; "Santa Ana" = SNA (John Wayne) | SNA's code belongs to Santa Ana. The agent offers to add BUR, LGB and ONT. |
+| A-09 | **Hypothesis:** seats per flight rising faster than peers while departures stay flat signals an airfield constraint | Airlines up-gauge when they can't add flights. **Must be validated in Phase 1** (see section 8): fleet strategy and pilot shortages also drive up-gauging. |
+| A-10 | Lost arrival capacity ≈ (reference arrival rate − current arrival rate) × operating hours. Shown as an upper bound. | Investors want a number. This one is labeled as an estimate, never as a measurement. |
+| A-11 | ULCC flag threshold = __% of seats | Set in Phase 1 |
+| A-12 | Utilization trigger for the Regulatory label = 85% of the cap | Judgment |
+
+### Initial constraints (verify before submitting)
+
+- **SNA**
+  - The 1985 Settlement Agreement sets limits on annual passengers, average daily departures, and loading bridges.
+  - Curfew: departures allowed only 07:00–22:00 on weekdays, from 08:00 on Sundays.
+  - The agreement runs through 2030; the curfew commitment runs through 2035.
+  - One commercial runway, 5,700 ft. Narrowbody aircraft only.
+  - ⚠️ Exact passenger cap for 2026–2030: proposed at 12.2 or 12.5 million, final figure unconfirmed.
+- **LAX**
+  - Planned for a practical capacity of 78.9 million annual passengers. Exceeding the forecast triggers a planning study, not a hard cap. **This is a soft limit.**
+  - ⚠️ Source documents are from 2004–2017. Confirm it's still current.
+- **SFO**
+  - Parallel runways are 750 ft apart.
+  - In low visibility, arrivals go single-file at about 30 per hour, versus about 60 in good weather.
+  - 2026: the FAA ended side-by-side landings, even in clear weather. The arrival rate was cut from 54 to 36 per hour, with a planned rise to 45 per hour in October 2026.
+  - FAA IATA Level 2 (schedule-facilitated) airport.
+  - ⚠️ Confirm the current arrival rate via the live FAA API.
+
+---
+
+## 6. The four questions
+
+| # | Question | Tools | Approach | Must say |
+|---|---|---|---|---|
+| 1 | New England terminal candidates | `rank_airports(region="new_england", lens=…)` | National percentiles, then filter to CT, ME, MA, NH, RI, VT. Show both lenses and the constraint label for each airport. | BOS wins on scale. The pressure lens surfaces mid-size airports. No gate data exists. |
+| 2 | LAX vs SNA congestion | `compare_airports(["LAX","SNA"])`, `get_constraints` | Separate three kinds of congestion: airfield, demand, regulatory | SNA is capped by law; money can't unlock it. Its agreement expires in 2030, which is a watch item. LAX has a soft limit. |
+| 3 | % long-haul flights out of ANC | `route_mix("ANC", period, include_cargo)` | Route by period (section 4). Show distance buckets, the passenger vs cargo split, and EU threshold sensitivity. | State the definition, the time window, and the data source. Missing small Alaskan flights would bias the share upward. |
+| 4 | SFO unmet demand and why | `demand_signals("SFO")`, `get_constraints`, `live_status` | Unmet demand is not observable. Present five traces: load factor, up-gauging vs departures, passengers vs flights recovery since 2019, Level 2 status, live delay programs. Add the A-10 estimate. | Airfield-limited: a terminal adds no landings. The lever is gauge (widebody gates). |
+
+---
+
+## 7. Agent design
+
+**Tools.** Each returns `{values, formula, sources, assumptions, confidence}`.
+- `rank_airports(states|region, lens, weights=None)`
+- `compare_airports(codes, metrics=None)`
+- `route_mix(airport, period, threshold_km=None, include_cargo=False)`
+- `demand_signals(airport)`
+- `get_constraints(airport)`
+- `live_status(airport)`
+- `get_assumption(id)`: lets users ask "why did you assume that?"
+
+**What the LLM does:**
+- Understands the question: airports, region, time period, follow-up references ("and Hartford?").
+- Picks the tools.
+- Narrates the result with tags.
+- Asks a clarifying question when the request is ambiguous.
+
+**What the LLM never does:**
+- Arithmetic.
+- Pick the data source.
+- Produce a number that isn't in a tool result.
+
+**Grounding guardrail (cheap, high value):** after each answer, code extracts every number from the response and checks it appears in that turn's tool results. Any unmatched number gets flagged.
+
+**Stack:** Python, Claude API tool use, Streamlit chat with session memory. Voice is a bonus, only if time is left.
+
+**Code structure**
+```
+sources/      bts.py, faa.py, opensky.py, ourairports.py, cache.py
+metrics.py    load_factor, growth, upgauging, departures_per_runway, route_buckets, …
+scoring.py    percentile, score_airport, rank_airports, constraint_label
+routing.py    period → source
+tools.py      agent-facing wrappers (numbers + formula + sources + assumptions)
+agent.py      tool-calling loop, system prompt, grounding check
+app.py        Streamlit chat
+config.yaml   weights, thresholds, regions, cargo callsigns
+kb/           constraints.yaml, assumptions.yaml
+tests/
+```
+
+---
+
+## 8. Validation
+
+- **Unit tests** for every metric, using hand-computed fixtures.
+- **Golden tests** for the four questions: run the tools directly with no LLM, and assert on structure and sanity ranges.
+- **Hypothesis A-09 backtest:**
+  - Known constrained airports: SFO, LGA, DCA, EWR, SNA. Do they show the signature?
+  - Comparable unconstrained airports: do they *not* show it?
+  - If the signature doesn't separate the two groups, drop it from the Airfield rule and say so in the doc. A negative result reported honestly is a strong result.
+- **Grounding check** on every agent answer (section 7).
+
+---
+
+## 9. Phases
+
+| Phase | Work | Budget | Done when |
+|---|---|---|---|
+| 0. Verify | See the checklist below | 2h | Every ⚠️ in this doc is resolved or replaced by a stated fallback |
+| 1. Core | Sources, metrics, scoring, label, KB files, tests. **No LLM.** | 5h | All four questions answerable by calling Python directly |
+| 2. Agent | Tools, system prompt, routing, grounding check | 3h | The four questions work in plain English |
+| 3. Chat | Streamlit with session memory | 1.5h | Follow-ups and weight what-ifs work |
+| 4. Generalize | Any airport, region or period; edge cases | 2h | New questions work without code changes |
+| 5. Docs | Design doc + README | 1.5h | Submittable |
+| Bonus | Voice | Only if time is left | |
+
+**Phase 0 checklist**
+1. Can TranStats route-level T-100 be fetched by code at runtime? Measure size and download time.
+2. Same check for the delay-causes file.
+3. Check T-100 publication lag. Confirm what "latest 12 months" means in practice.
+4. Create an OpenSky account. Run a test query for ANC departures over the last 7 days.
+5. FAA NAS Status: test SFO and check which fields come back (arrival rate, GDP).
+6. Is airport × carrier data available? If not, drop the ULCC flag.
+7. Verify: SNA 2026–2030 cap; LAX 78.9M status; SFO current arrival rate; FAA hub-class thresholds; the $4.50 PFC cap.
+
+---
+
+## 10. Key tradeoffs (seed for the design doc)
+
+- **Percentile vs min-max.** Chose percentile: robust to outliers. Cost: loses magnitude ("how much better").
+- **One score + constraint label vs one blended score.** Chose separation: a blended score hides *why* an airport scores high and what to invest in.
+- **Live APIs + cache vs a static snapshot.** Chose live, per the brief. Cost: dependency on external uptime and the T-100 lag.
+- **Structured KB vs RAG.** Chose a structured KB: it holds about 20 facts, and lookups are exact and testable. RAG becomes right when the KB grows to unstructured documents (master plans, EIRs). That's listed as future work.
+- **OpenSky 7-day sample vs annual data.** Annual is used when available; otherwise the sample is shown with its limits stated.
+- **Weights are judgment, not science.** That's why they're editable, shown in every answer, and recorded in the assumptions register.
+
+---
+
+## 11. Out of scope / future work
+
+- RAG over airport master plans and environmental documents.
+- Admin UI for weights and the KB.
+- Gate and terminal-area data.
+- Fares data (DB1B).
+- FAA ASPM (requires registration).
+- Scheduled demand vs arrival rate by hour.
+- Deployment.
+
+---
+
+## 12. Repository rules
+
+- **One public GitHub repo** holds everything: code, `config.yaml`, `kb/`, tests, the design doc, the README, and `CLAUDE.md`. No second repo, and no files living only on the laptop or in a chat.
+- Name: `airport-investment-agent`.
+- Data is **not** committed. It's fetched live and cached in `.cache/`, which is gitignored. The KB files *are* committed.
+- Secrets go in `.env` (gitignored). The repo ships a `.env.example` listing `ANTHROPIC_API_KEY`, `OPENSKY_CLIENT_ID`, and `OPENSKY_CLIENT_SECRET`.
+- Manual setup (done by Nimrod, ~2 minutes):
+  1. Create an empty public repo on GitHub.
+  2. Clone it.
+  3. Open Claude Code inside it.
+- Claude Code then does everything else inside that folder. It must never create a repo or directory outside it.
+- Commit after every phase with a clear message. The git history shows the step-by-step build.
+
+---
+
+## 13. Open decisions
+
+- [ ] Build split: what Nimrod writes vs what Claude Code writes. Nimrod must be able to defend every line.
+- [ ] Set A-11 (ULCC threshold) and confirm the A-12 and Terminal-rule thresholds after seeing the real distributions in Phase 1.

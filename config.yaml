@@ -1,0 +1,64 @@
+# Weights, thresholds and parameters. Judgment calls here are documented in kb/assumptions.yaml.
+# See docs/PLAN.md section 3.
+
+scoring:
+  lenses:
+    absolute:            # A-01
+      growth: 0.35
+      pressure: 0.35
+      scale: 0.30
+    pressure:
+      growth: 0.5
+      pressure: 0.5
+      scale: 0.0
+  default_lens: absolute
+  growth:
+    baseline_year: 2019  # A-04: latest 12 months vs 2019 (recovery)
+    cagr_start_year: 2022  # A-04: CAGR 2022 -> latest (momentum)
+
+constraint_label:
+  regulatory_utilization: 0.85   # A-12: share of a hard cap that triggers "Regulatory"
+  airfield_percentile: 75        # departures per runway / NAS delay share >= p75 of peers
+  terminal_percentile: 60        # growth AND pressure >= p60; confirm in Phase 1
+  use_upgauging_signature: true  # A-09 hypothesis; set false if the Phase 1 backtest fails
+
+flags:
+  ulcc_share_threshold: null     # A-11: set in Phase 1 (drop flag if no airport x carrier data)
+  seasonality_threshold: null    # TODO: define "highly seasonal" in Phase 1
+  min_months_required: 12        # TODO: confirm; fewer months -> low-confidence flag
+
+peer_groups:
+  # A-02: FAA hub class by share of national enplanements. VERIFY in Phase 0.
+  large: 0.01
+  medium: 0.0025
+  small: 0.0005
+  # non-hub: below "small" but above universe minimum
+  universe_min_enplanements: 10000   # A-03: FAA primary airports
+
+regions:
+  new_england: [CT, ME, MA, NH, RI, VT]
+
+route_mix:
+  long_haul_km: 4000           # A-05 (Eurocontrol)
+  long_haul_km_sensitivity: 3500  # A-05 alternative (EU)
+  include_cargo_default: false # A-06
+  cargo_callsigns: []          # A-06: TODO fill in Phase 1
+
+aliases:                       # A-08
+  LA: LAX
+  Santa Ana: SNA
+
+passengers_per_enplanement: 2  # A-07
+
+sources:
+  bts_t100_dataset: r495-tyji
+  bts_base_url: https://data.bts.gov/resource
+  faa_nas_base_url: https://nasstatus.faa.gov
+  opensky_max_window_days: 7
+
+cache:
+  dir: .cache
+  ttl_hours: 24                # not specified in PLAN; placeholder
+
+llm:
+  model: claude-opus-5-5

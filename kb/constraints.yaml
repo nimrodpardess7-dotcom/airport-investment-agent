@@ -1,0 +1,66 @@
+# Facts about airports. Cite as [domain: id]. Every entry needs a source before submission.
+# Fields: id, airport, type (cap | curfew | runway | schedule-level), statement, value, source_url, verified_on, confidence
+# All entries below are UNVERIFIED seeds from docs/PLAN.md section 5; verify in Phase 0.
+
+- id: SNA-01
+  airport: SNA
+  type: cap
+  statement: The 1985 Settlement Agreement limits annual passengers, average daily departures and loading bridges. It runs through 2030.
+  value: {annual_passengers_2026_2030: null, expires: 2030}   # proposed 12.2M or 12.5M, unconfirmed
+  source_url: null
+  verified_on: null
+  confidence: unverified
+
+- id: SNA-02
+  airport: SNA
+  type: curfew
+  statement: Departures allowed only 07:00-22:00 on weekdays, from 08:00 on Sundays. The curfew commitment runs through 2035.
+  value: {weekday_start: "07:00", sunday_start: "08:00", end: "22:00", expires: 2035}
+  source_url: null
+  verified_on: null
+  confidence: unverified
+
+- id: SNA-03
+  airport: SNA
+  type: runway
+  statement: One commercial runway, 5,700 ft. Narrowbody aircraft only.
+  value: {commercial_runways: 1, length_ft: 5700}
+  source_url: null
+  verified_on: null
+  confidence: unverified
+
+- id: LAX-01
+  airport: LAX
+  type: cap
+  statement: Planned for a practical capacity of 78.9 million annual passengers. Exceeding the forecast triggers a planning study, not a hard cap (soft limit).
+  value: {annual_passengers: 78900000, hard: false}
+  source_url: null   # source documents from 2004-2017; confirm still current
+  verified_on: null
+  confidence: unverified
+
+- id: SFO-01
+  airport: SFO
+  type: runway
+  statement: Parallel runways are 750 ft apart. In low visibility, arrivals go single-file at about 30 per hour, versus about 60 in good weather.
+  value: {runway_spacing_ft: 750, arrivals_per_hour_ifr: 30, arrivals_per_hour_vfr: 60}
+  source_url: null
+  verified_on: null
+  confidence: unverified
+
+- id: SFO-02
+  airport: SFO
+  type: runway
+  statement: In 2026 the FAA ended side-by-side landings, even in clear weather. The arrival rate was cut from 54 to 36 per hour, with a planned rise to 45 per hour in October 2026.
+  value: {arrival_rate_before: 54, arrival_rate_after: 36, arrival_rate_planned_oct_2026: 45}
+  source_url: null   # confirm current rate via live FAA NAS Status
+  verified_on: null
+  confidence: unverified
+
+- id: SFO-03
+  airport: SFO
+  type: schedule-level
+  statement: SFO is an IATA Level 2 (schedule-facilitated) airport.
+  value: {iata_level: 2}
+  source_url: null
+  verified_on: null
+  confidence: unverified

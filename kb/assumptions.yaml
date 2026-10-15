@@ -1,0 +1,111 @@
+# Judgment calls. Cite as [assumption: A-xx]. Edit freely; every change is versioned in git.
+# Fields: id, statement, value, why, alternatives_considered, sensitivity, owner, last_reviewed
+# null = not yet filled in (Phase 0/1).
+
+- id: A-01
+  statement: Opportunity score weights are Growth 0.35, Capacity Pressure 0.35, Scale 0.30.
+  value: {growth: 0.35, pressure: 0.35, scale: 0.30}
+  why: Growth and pressure are the thesis. Scale matters because payback is per passenger, but size alone isn't opportunity.
+  alternatives_considered: "Pressure lens: scale 0, growth 0.5, pressure 0.5."
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-02
+  statement: Peer groups are FAA hub classes, computed from each airport's share of national enplanements.
+  value: "large >= 1%, medium 0.25-1%, small 0.05-0.25%, non-hub below (to verify)"
+  why: Comparing BOS to Burlington is meaningless.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-03
+  statement: The universe is FAA primary airports (more than 10,000 enplanements per year).
+  value: 10000
+  why: Below that, data is noise.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-04
+  statement: Growth is latest 12 months vs 2019, plus CAGR from 2022 to latest.
+  value: {baseline_year: 2019, cagr_start_year: 2022}
+  why: A plain 3-5 year CAGR is distorted by COVID.
+  alternatives_considered: Plain 3-5 year CAGR.
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-05
+  statement: Long-haul means a great-circle distance over 4,000 km (Eurocontrol).
+  value: 4000
+  why: No single industry standard exists; this one is citable.
+  alternatives_considered: EU 3,500 km, shown as a sensitivity check.
+  sensitivity: Long-haul share at 3,500 km is reported alongside.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-06
+  statement: Route mix counts passenger flights only by default; cargo is shown separately, identified by an operator callsign list in config.
+  value: {include_cargo_default: false}
+  why: The client invests in passenger terminals. ANC cargo would distort the answer.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-07
+  statement: Total passengers are approximately enplanements x 2.
+  value: 2
+  why: Legal caps count everyone passing through; T-100 counts only boarding passengers.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-08
+  statement: '"LA" means LAX; "Santa Ana" means SNA (John Wayne).'
+  value: {LA: LAX, Santa Ana: SNA}
+  why: SNA's code belongs to Santa Ana.
+  alternatives_considered: The agent offers to add BUR, LGB and ONT.
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-09
+  statement: "Hypothesis: seats per flight rising faster than peers while departures stay flat signals an airfield constraint."
+  value: null
+  why: Airlines up-gauge when they can't add flights.
+  alternatives_considered: null
+  sensitivity: Fleet strategy and pilot shortages also drive up-gauging. Must be validated by the Phase 1 backtest; dropped from the Airfield rule if it fails.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-10
+  statement: Lost arrival capacity is approximately (reference arrival rate - current arrival rate) x operating hours, shown as an upper bound.
+  value: null
+  why: Investors want a number. It is labeled as an estimate, never a measurement.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-11
+  statement: ULCC flag threshold, as a share of seats.
+  value: null   # set in Phase 1
+  why: ULCCs run high load factors by design, which inflates the pressure signal.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-12
+  statement: The Regulatory label triggers at utilization of 85% of a hard cap.
+  value: 0.85
+  why: Judgment.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
