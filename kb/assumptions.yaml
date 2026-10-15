@@ -12,18 +12,18 @@
   last_reviewed: null
 
 - id: A-02
-  statement: Peer groups are FAA hub classes, computed from each airport's share of national enplanements.
-  value: "large >= 1%, medium 0.25-1%, small 0.05-0.25%, non-hub below (to verify)"
+  statement: Peer groups are FAA hub classes, computed from each airport's share of national enplanements (49 U.S.C. 47102, verified). Applied after A-03.
+  value: {large: 0.01, medium: 0.0025, small: 0.0005, borderline_margin: 0.10}
   why: Comparing BOS to Burlington is meaningless.
-  alternatives_considered: null
-  sensitivity: null
+  alternatives_considered: Using the FAA's official published hub list instead of computing from T-100.
+  sensitivity: Computed from T-100 (A-16), so an airport near a cutoff may land one class off from the FAA's official list. Airports within the borderline margin get a "borderline class" note.
   owner: Nimrod
   last_reviewed: null
 
 - id: A-03
-  statement: The universe is FAA primary airports (more than 10,000 enplanements per year).
+  statement: The universe is FAA primary airports (more than 10,000 enplanements per year). Applied first.
   value: 10000
-  why: Below that, data is noise.
+  why: Below that, data is noise. This is the same line as the FAA's non-hub floor, so A-02 and A-03 don't conflict.
   alternatives_considered: null
   sensitivity: null
   owner: Nimrod
@@ -56,6 +56,15 @@
   owner: Nimrod
   last_reviewed: null
 
+- id: A-06a
+  statement: Cargo is identified by the ICAO callsign prefix of cargo-only operators (list in config).
+  value: [FDX, UPS, GTI, PAC, CKS, ABX, ATN, WGN, CLX, NCA, CKK, CAO, CSS, NAC, LYC]
+  why: Callsign is the only operator signal OpenSky returns for every flight.
+  alternatives_considered: OpenSky aircraft metadata (freighter types) as a second check, if it's available.
+  sensitivity: Airlines that fly both passengers and freighters use one callsign for both, so their freighters get counted as passenger flights. Phase 0 measures the gap on one week of ANC departures; every prefix to be verified.
+  owner: Nimrod
+  last_reviewed: null
+
 - id: A-07
   statement: Total passengers are approximately enplanements x 2.
   value: 2
@@ -75,8 +84,8 @@
   last_reviewed: null
 
 - id: A-09
-  statement: "Hypothesis: seats per flight rising faster than peers while departures stay flat signals an airfield constraint."
-  value: null
+  statement: "Hypothesis: up-gauging (% change in seats per departure, latest 12 months vs 2019) >= p75 of peers AND departures change vs 2019 <= p50 of peers signals an airfield constraint."
+  value: {upgauging_min_percentile: 75, departures_change_max_percentile: 50}
   why: Airlines up-gauge when they can't add flights.
   alternatives_considered: null
   sensitivity: Fleet strategy and pilot shortages also drive up-gauging. Must be validated by the Phase 1 backtest; dropped from the Airfield rule if it fails.
@@ -102,9 +111,72 @@
   last_reviewed: null
 
 - id: A-12
-  statement: The Regulatory label triggers at utilization of 85% of a hard cap.
+  statement: The Regulatory label triggers when passengers (A-07) reach 85% of a hard passenger cap. Other caps (daily departures, loading bridges, curfew) are shown as facts and never trigger it.
   value: 0.85
+  why: Judgment. Only a passenger cap directly limits terminal payback.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-13
+  statement: The Terminal label needs Growth and Pressure both >= p60 of peers.
+  value: 60
   why: Judgment.
+  alternatives_considered: null
+  sensitivity: Recheck against the real distribution in Phase 1.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-14
+  statement: The Airfield label triggers at departures per effective runway >= p75 of peers.
+  value: 75
+  why: Judgment.
+  alternatives_considered: null
+  sensitivity: Recheck against the real distribution in Phase 1.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-15
+  statement: Effective runway = open (not marked closed in OurAirports) AND at least the minimum length in config. One OurAirports row = one runway.
+  value: {min_length_ft: 5000}
+  why: Excludes closed and general-aviation-only strips; SNA's 5,700 ft runway must still count.
+  alternatives_considered: Raw runway count (misleading; SNA has a 2,887 ft GA-only runway).
+  sensitivity: The count stays crude on purpose. Crossing or close-parallel geometry (SFO) is handled by a constraints.yaml entry, which fires the Airfield label directly.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-16
+  statement: T-100 segment passengers at origin are a proxy for enplanements.
+  value: null
+  why: It's the only monthly public source covering every airport.
+  alternatives_considered: FAA CY enplanement reports (annual only, published late).
+  sensitivity: Segment data also counts through-passengers who stay on board, so it slightly overstates enplanements. Same bias for every airport, so the ranking holds.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-17
+  statement: Ambiguous names ("Portland", "Washington", ...) trigger a clarifying question, never a guess.
+  value: {Portland: [PWM, PDX], Washington: [DCA, IAD, BWI]}
+  why: PWM vs PDX; DCA vs IAD vs BWI.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-18
+  statement: Highly seasonal = busiest month / quietest month >= 2.0, over the latest 12 months.
+  value: 2.0
+  why: Simple to explain.
+  alternatives_considered: null
+  sensitivity: Recheck in Phase 1 against known seasonal airports (ACK, MVY) vs year-round ones.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-19
+  statement: If any required 12-month window is missing 1 or more months, flag low confidence. If it's missing more than 3 months, don't compute that component; show it as n/a.
+  value: {low_confidence_if_missing_months: 1, skip_component_if_missing_months: 4}
+  why: A partial year biases both growth and load factor.
   alternatives_considered: null
   sensitivity: null
   owner: Nimrod

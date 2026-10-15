@@ -10,16 +10,19 @@ Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source 
 2. **Tag every claim:** `[data: source]`, `[domain: KB-id]`, `[assumption: A-xx]`.
 3. **Source routing is deterministic** (code picks the source from the period, not the LLM).
 4. **No silent gaps.** If data can't answer, say so and offer the nearest supported answer.
-5. **Everything changeable lives in files:** weights/thresholds → `config.yaml`; facts → `kb/constraints.yaml`; judgment calls → `kb/assumptions.yaml`.
+5. **Everything changeable lives in files:** weights/thresholds → `config.yaml`; facts → `kb/constraints.yaml`; judgment calls → `kb/assumptions.yaml`. **Every config threshold has an A-ID.**
+6. **Every answer states its data window** (e.g. "T-100 through May 2026", "OpenSky, Oct 8–14").
 
 ## Scoring
 
 `score = 0.35·Growth + 0.35·Pressure + 0.30·Scale` (0–100)
 
 - **Growth** = mean of percentiles: latest-12-months vs 2019, and CAGR 2022→latest. (T-100)
-- **Capacity Pressure** = mean of percentiles: load factor, and seats-per-departure trend. (T-100)
-- **Scale** = percentile of annual enplanements. (T-100) No log (percentile is rank-only).
-- Percentiles are computed within the **national** FAA hub-class peer group, *then* filtered by region.
+- **Capacity Pressure** = mean of percentiles: load factor (latest 12 months), and up-gauging = % change in seats per departure, latest 12 months vs 2019. (T-100)
+- **Scale** = percentile of enplanements over the latest 12 months. (T-100) No log (percentile is rank-only).
+- **Time windows:** "latest 12 months" = latest 12 published months, rolling; 2019 and 2022 = calendar years. Always full year vs full year.
+- Universe: >10,000 enplanements (A-03) first, then FAA hub class by share of national enplanements (A-02: 1% / 0.25% / 0.05%), with a "borderline class" note near cutoffs. T-100 segment passengers proxy enplanements (A-16).
+- Percentiles are computed within the **national** peer group, *then* filtered by region.
 - Lenses: *absolute* (default weights), *pressure* (Scale 0, Growth 0.5, Pressure 0.5).
 - What-if weights from chat: session-only, validated (non-negative, normalized to 1), printed in every answer.
 - Congestion is **not** in the score; it feeds the constraint label.
@@ -28,20 +31,22 @@ Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source 
 
 | Label | Rule |
 |---|---|
-| Regulatory | Hard cap/curfew in `constraints.yaml` **and** utilization ≥ 85% of cap |
-| Airfield | Departures/runway ≥ p75 of peers, **or** NAS delay share ≥ p75 (if available), **or** A-09 signature |
-| Terminal | Growth ≥ p60 **and** Pressure ≥ p60, and nothing above fired |
+| Regulatory | Hard **passenger** cap in `constraints.yaml` **and** passengers (A-07) ≥ 85% of it (A-12). Other caps/curfews are facts only, never triggers |
+| Airfield | Departures per *effective* runway ≥ p75 of peers (A-14), **or** NAS delay share ≥ p75 (if available), **or** A-09 signature (up-gauging ≥ p75 **and** departures change vs 2019 ≤ p50), **or** a runway-geometry entry in `constraints.yaml` |
+| Terminal | Growth ≥ p60 **and** Pressure ≥ p60 (A-13), and nothing above fired |
 | None evident | Otherwise |
 
-**Flags** (beside the score, never in it): low confidence (non-hub, seasonal, missing months); ULCC share high (if airport×carrier data exists); live disruption (active GDP / ground stop).
+Effective runway (A-15) = open **and** ≥ 5,000 ft. Close-parallel/crossing geometry lives in `constraints.yaml`, not code.
+
+**Flags** (beside the score, never in it): low confidence (non-hub; seasonal = peak/trough month ≥ 2.0 (A-18); ≥1 missing month, component n/a if >3 missing (A-19)); ULCC share high (A-11, if airport×carrier data exists); live disruption (active GDP / ground stop).
 
 ## Data
 
 | Source | Use |
 |---|---|
 | BTS T-100 Segment Summary by origin (Socrata `data.bts.gov`, id `r495-tyji`, no key) | Monthly departures, passengers, seats, LF, distance, intl share |
-| FAA NAS Status (`nasstatus.faa.gov`, no key) | Live delays, GDPs, ground stops, runway config, arrival rate |
-| OpenSky (OAuth client credentials) | Departures with estimated destination, **≤7-day window**, recent only |
+| FAA NAS Status (`nasstatus.faa.gov`, no key) | Live delays, GDPs, ground stops, runway config, arrival rate. Not listed = no active event |
+| OpenSky (OAuth client credentials) | Departures with estimated destination, **≤7-day window**, recent only. ICAO codes (PANC) mapped via OurAirports. Count and report null destinations. Non-commercial free tier |
 | OurAirports CSV | State, coordinates, runway count |
 | TranStats route-level T-100, delay causes | ⚠️ Runtime fetchability unverified (Phase 0) |
 
@@ -60,7 +65,7 @@ Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source 
 
 1. **New England terminal candidates:** `rank_airports(region="new_england")`, both lenses + constraint label. Must say: BOS wins on scale, pressure lens surfaces mid-size airports, no gate data.
 2. **LAX vs SNA congestion:** `compare_airports`, `get_constraints`. Separate airfield / demand / regulatory. SNA is capped by law (agreement to 2030); LAX limit is soft.
-3. **% long-haul out of ANC:** `route_mix("ANC", period, include_cargo)`. State definition (A-05, >4,000 km; 3,500 km sensitivity), window, source, passenger vs cargo split, upward bias from missing small Alaskan flights.
+3. **% long-haul out of ANC:** `route_mix("ANC", period, include_cargo)`. State definition (A-05, >4,000 km; 3,500 km sensitivity), window, source, passenger vs cargo split (cargo by callsign prefix, A-06a; mixed-fleet airlines are a known gap), upward bias from missing small Alaskan flights.
 4. **SFO unmet demand:** `demand_signals`, `get_constraints`, `live_status`. Unmet demand isn't observable: show five traces + A-10 upper-bound estimate. Airfield-limited; lever is gauge.
 
 ## Agent design
@@ -70,7 +75,8 @@ Tools return `{values, formula, sources, assumptions, confidence}`:
 
 - LLM: parse the question (airports, region, period, follow-ups), pick tools, narrate with tags, ask when ambiguous.
 - LLM never: arithmetic, source selection, numbers absent from tool results.
-- **Grounding check:** after each answer, code extracts every number and verifies it appears in that turn's tool results; unmatched numbers are flagged.
+- **Grounding check:** after each answer, code extracts every number and verifies it appears in that turn's tool results; unmatched numbers are flagged. Tools return a `display` string per value; the LLM quotes it verbatim and the check matches against it.
+- Ambiguous names (Portland, Washington) → clarifying question, never a guess (A-17).
 - Stack: Python, Claude API tool use, Streamlit chat with session memory.
 
 Layout: `sources/` (bts, faa, opensky, ourairports, cache) · `metrics.py` · `scoring.py` · `routing.py` · `tools.py` · `agent.py` · `app.py` · `config.yaml` · `kb/` · `tests/`.
@@ -81,6 +87,7 @@ Layout: `sources/` (bts, faa, opensky, ourairports, cache) · `metrics.py` · `s
 - Golden tests for the four questions: call tools directly (no LLM), assert structure + sanity ranges.
 - A-09 backtest: constrained (SFO, LGA, DCA, EWR, SNA) vs comparable unconstrained airports. If the signature doesn't separate them, drop it from the Airfield rule and report that.
 - Grounding check on every agent answer.
+- Eval set (~12 questions) in `tests/eval_questions.yaml`, end-to-end: the four questions, a follow-up, a weight what-if, an ambiguous name, an unsupported period, an unknown code, an unanswerable question. Pass = right tools, clean grounding, required caveats.
 
 ## Repo rules
 
@@ -88,4 +95,5 @@ Layout: `sources/` (bts, faa, opensky, ourairports, cache) · `metrics.py` · `s
 - Data is never committed; it's cached in `.cache/` (gitignored). KB files are committed.
 - Secrets in `.env` (gitignored); `.env.example` lists `ANTHROPIC_API_KEY`, `OPENSKY_CLIENT_ID`, `OPENSKY_CLIENT_SECRET`.
 - Commit after every phase with a clear message. Don't start a phase until Nimrod says so.
+- Build split: Claude Code writes `sources/`, `tools.py`, `agent.py`, `app.py`. Nimrod reviews `scoring.py` and the label rules line by line before they're committed.
 - Nimrod must be able to defend every line: keep code simple and explicit.

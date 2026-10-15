@@ -1,5 +1,7 @@
 # Facts about airports. Cite as [domain: id]. Every entry needs a source before submission.
 # Fields: id, airport, type (cap | curfew | runway | schedule-level), statement, value, source_url, verified_on, confidence
+# A runway entry whose value has `geometry` set fires the Airfield label directly (PLAN 3, A-15).
+# Only a cap entry with value.annual_passengers can fire the Regulatory label (A-12).
 # All entries below are UNVERIFIED seeds from docs/PLAN.md section 5; verify in Phase 0.
 
 - id: SNA-01
@@ -42,7 +44,7 @@
   airport: SFO
   type: runway
   statement: Parallel runways are 750 ft apart. In low visibility, arrivals go single-file at about 30 per hour, versus about 60 in good weather.
-  value: {runway_spacing_ft: 750, arrivals_per_hour_ifr: 30, arrivals_per_hour_vfr: 60}
+  value: {geometry: close_parallel, runway_spacing_ft: 750, arrivals_per_hour_ifr: 30, arrivals_per_hour_vfr: 60}
   source_url: null
   verified_on: null
   confidence: unverified
