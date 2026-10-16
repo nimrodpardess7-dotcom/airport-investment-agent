@@ -3,7 +3,7 @@
 Run on 2026-10-15/16. Each source has a probe script in `scripts/phase0/`; raw results are saved to `.cache/phase0/*.json` (gitignored).
 Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `scripts/phase0/`).
 
-**Bottom line:** every ⚠️ in PLAN.md is resolved except OpenSky (pending credentials) and two constraint facts that need a stated fallback. Both TranStats bulk sources **can be fetched by code at runtime**, which is better than PLAN assumed. Five decisions for Nimrod are listed at the end.
+**Bottom line:** every ⚠️ in PLAN.md is resolved; two constraint facts carry a stated fallback. Both TranStats bulk sources **can be fetched by code at runtime**, which is better than PLAN assumed. Five decisions for Nimrod are listed at the end.
 
 ## Summary
 
@@ -12,7 +12,7 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
 | 1 | TranStats T-100 route-level at runtime | ✅ Works. One year: 6.3 MB zip, 571k rows, ~31–36 s. One month: 0.56 MB, ~7 s. Data through **Jul 2026**. | Use it for route mix (Q3) and ULCC. Cache one file per year. |
 | 2 | TranStats delay causes at runtime | ✅ Works. 12 months: 0.9 MB zip, 22k rows, ~5 s. Through **Jul 2026**, 369 airports. | Keep NAS delay share in the Airfield rule (not cut). |
 | 3 | T-100 publication lag | Socrata `r495-tyji`: latest **Apr 2026** (~6-month lag). TranStats: latest **Jul 2026** (~3-month lag). No missing months 2014–2025. | **Decision D1.** Today "latest 12 months" on Socrata = May 2025 – Apr 2026. |
-| 4 | OpenSky ANC, last 7 days | ⏸ **Pending credentials.** Anonymous call returns `403 You cannot access historical flights`. Script is ready. | Nimrod: create the account + API client, fill `.env`, re-run `opensky.py`. |
+| 4 | OpenSky ANC, last 7 days | ✅ Works (OAuth). 2,129 PANC departures Oct 8–14, 2026. **~2-day limit per request** → 4 calls, ~0.5–1 s each, 30 credits each (4,000/day). 16.3% have no destination. | Use only for "last 7 days". Correct PLAN's "max 7-day window" to "7 days fetched as 2-day chunks". |
 | 5 | FAA NAS Status | ✅ Works, no key, ~0.2 s. Arrival rate + runway config exist, **but only for airports currently listed** (SFO wasn't listed at test time). | A-10 uses KB rates (SFO-02) as the reference; the live rate is shown only when present. |
 | 6 | Airport × carrier data | ✅ Available via TranStats route-level (not via Socrata). | Keep the ULCC flag; set A-11 in Phase 1. |
 | 7 | SNA cap / LAX 78.9M / SFO rate | Resolved with caveats; see below. `kb/constraints.yaml` updated with sources. | SNA tier unconfirmed, but the label is the same either way. |
@@ -68,14 +68,19 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
 
 ## 4. OpenSky Network — `opensky.py`
 
-- **Pending credentials.** `.env` doesn't exist yet. An anonymous call to `/flights/departure` returns **403 "You cannot access historical flights"**, so an account is required.
-- The script is ready. It gets an OAuth token, pulls PANC departures for the 7 days ending 24 h ago (departures are batch-processed), and reports:
-  - fields, latency, flight count
-  - null `estArrivalAirport` count
-  - long-haul share (4,000 / 3,500 km, passenger-only vs all)
-  - cargo by callsign prefix
-  - the top unclassified prefixes, for hand review (A-06a)
-- Given section 2, OpenSky is now needed **only** for "last 7 days" questions.
+- **Works with an account.** Anonymous calls return **403 "You cannot access historical flights"**. Auth is OAuth2 client credentials; tokens last 30 min.
+- **Request limit:** the API docs limit flight queries to **~2 days per request** (PLAN said 7). A 7-day window = 4 chunked calls, 0.5–1 s and 30 credits each; a standard account has 4,000 credits/day per endpoint. Flights are batch-processed overnight, so the window ends at yesterday 00:00 UTC.
+- **Fields:** `icao24, callsign, firstSeen, lastSeen, estDepartureAirport, estArrivalAirport` + distance/candidate-count quality fields. **No aircraft type or operator field**: cargo can only be guessed from the callsign.
+- **ANC, Oct 8–14, 2026:** 2,129 departures, **348 (16.3%) with no estimated destination**. These are counted and reported, not dropped. Destinations are mapped to coordinates via OurAirports (ICAO).
+- **Cross-check with T-100 (section 2):**
+
+| Long-haul share (> 4,000 km) | OpenSky 7 days | T-100 2025 |
+|---|---|---|
+| All flights | 43.0% | 43.2% |
+| "Passenger" | 25.2% (callsign rule) | 11.4% (`AIRCRAFT_CONFIG` = passenger) |
+
+  The totals agree, which validates both sources. The passenger split doesn't: the callsign rule leaves freighters from Cathay (CPA), China Airlines (CAL), Korean (KAL), EVA, Alaska Central Express (AER), China Southern (CSG) and others in the "passenger" bucket. OpenSky also includes private/GA flights (N-registrations), which T-100 doesn't.
+- **Conclusion:** OpenSky is fine for "what flew out of ANC this week". It isn't reliable for a passenger-only share. See D2.
 
 ## 5. FAA NAS Status — `faa_nas.py`
 
@@ -137,9 +142,10 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
   - *Recommendation:* (a) for the score, keeping the plan simple. Add a "cargo-heavy airport" low-confidence flag (freight share from the Socrata freight columns). Use (b) for route mix and ULCC.
 - **D2. Cargo rule (A-06a).**
   - *Recommendation:* use `AIRCRAFT_CONFIG` for any month/season/year query, and keep callsign prefixes **only** for the OpenSky 7-day path.
-  - For that path, extend the list with carriers that fly only freighters through ANC: CPA, CAL, KAL, EVA, CAO, AAR, AER. Mixed-fleet AS remains a stated gap.
+  - For that path, extend the list with carriers that fly only freighters through ANC: CPA, CAL, KAL, EVA, CAO, AAR, AER, CSG. Mixed-fleet AS remains a stated gap.
+  - The OpenSky test confirms the need: the callsign rule gives a 25.2% passenger long-haul share vs 11.4% from aircraft config.
 - **D3. NAS delay share:** keep it in the Airfield rule (data works), with its "reporting carriers only" caveat. *Recommendation: keep.*
 - **D4. A-10 reference rate:** use the KB (SFO-02) for both reference and current rates, and show the live FAA rate only when present. *Recommendation: yes.*
 - **D5. SNA tier:** accept 12.2M with 12.5M as the alternative (the label is robust), or keep looking for the county's 2026 determination. *Recommendation: accept, and say so in the answer.*
 
-**Still open:** OpenSky test (credentials); SFO IATA Level 2 source; SNA curfew hours against the ordinance.
+**Still open:** SFO IATA Level 2 source; SNA curfew hours against the ordinance.

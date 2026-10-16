@@ -1,6 +1,7 @@
 """Phase 0 checklist #4 and A-06a: OpenSky departures from ANC (ICAO PANC) over the last 7 days.
 
 Auth: OAuth2 client credentials (OPENSKY_CLIENT_ID / OPENSKY_CLIENT_SECRET in .env).
+Per the API docs, flight queries are limited to ~2 days per request, so 7 days = 4 chunked requests.
 Checks: latency, fields, how many flights have a null estimated destination, the long-haul share
 (> 4,000 km, A-05; 3,500 km sensitivity), and the callsign-prefix cargo split (A-06a) with the
 list of unclassified callsign prefixes so they can be reviewed by hand.
@@ -54,17 +55,26 @@ def main() -> None:
         result["token_seconds"] = t.seconds
         headers = {"Authorization": f"Bearer {tok.json()['access_token']}"}
 
-        end = int(time.time()) - 86400          # OpenSky departures are batch-processed overnight
+        # Flights are batch-processed overnight, so end yesterday. The API caps each request at ~2 days,
+        # so a 7-day window is fetched as 2-day chunks.
+        end = int(time.time()) // 86400 * 86400 - 86400
         begin = end - 7 * 86400
-        with Timer() as t:
-            r = client.get(f"{API}/flights/departure", params={"airport": AIRPORT, "begin": begin, "end": end},
-                           headers=headers)
-        result.update(status_code=r.status_code, seconds=t.seconds, bytes=len(r.content),
+        rows, chunks = [], []
+        for start in range(begin, end, 2 * 86400):
+            stop = min(start + 2 * 86400, end)
+            with Timer() as t:
+                r = client.get(f"{API}/flights/departure", params={"airport": AIRPORT, "begin": start, "end": stop},
+                               headers=headers)
+            chunks.append({"status": r.status_code, "seconds": t.seconds, "bytes": len(r.content),
+                           "credits_left": r.headers.get("X-Rate-Limit-Remaining")})
+            if r.status_code == 200:
+                rows += r.json()
+            elif r.status_code != 404:  # 404 = no flights in that chunk
+                result.update(works=False, chunks=chunks, body=r.text[:500])
+                return save("opensky", result)
+        result.update(chunks=chunks,
                       window_utc=[pd.Timestamp(begin, unit="s").isoformat(), pd.Timestamp(end, unit="s").isoformat()])
-        if r.status_code != 200:
-            result.update(works=False, body=r.text[:500])
-            return save("opensky", result)
-        flights = pd.DataFrame(r.json())
+        flights = pd.DataFrame(rows)
 
         ap = pd.read_csv(io.BytesIO(client.get(
             "https://davidmegginson.github.io/ourairports-data/airports.csv").content),
