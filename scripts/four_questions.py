@@ -18,9 +18,9 @@ def show(title: str, result: dict) -> None:
 
 
 if __name__ == "__main__":
-    show("Q1a. New England terminal candidates (absolute lens)", tools.rank_airports(region="new_england", top=6))
+    show("Q1a. New England terminal candidates (absolute lens)", tools.rank_airports(region="new_england"))
     show("Q1b. New England terminal candidates (pressure lens)",
-         tools.rank_airports(region="new_england", lens="pressure", top=6))
+         tools.rank_airports(region="new_england", lens="pressure"))
     show("Q2. LAX vs SNA: congestion", tools.compare_airports(["LAX", "SNA"]))
-    show("Q3. % long-haul departures from ANC (latest full year)", tools.route_mix("ANC", "latest"))
+    show("Q3. % long-haul departures from ANC (latest 12 months)", tools.route_mix("ANC", "latest"))
     show("Q4. SFO unmet demand and why", tools.demand_signals("SFO"))

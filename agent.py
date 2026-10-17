@@ -48,7 +48,9 @@ WEIGHTS = _nullable({"type": "object", "additionalProperties": False, "required"
 
 TOOL_SCHEMAS = [
     _tool("rank_airports",
-          "Rank airports by Opportunity Score (0-100) with the binding-constraint label and flags. "
+          "Rank airports by Opportunity Score (0-100) with the binding-constraint label, the checks behind it, "
+          "near misses, flags and raw values. Each row also carries its score and rank under the other lens. "
+          "Returns a one-line `summary` of how many airports were evaluated, shown and left out (with reasons). "
           "Percentiles are national; the region/states filter is applied afterwards.",
           {"region": _nullable({"type": "string", "enum": list(CONFIG["regions"])}, "Named region, or null"),
            "states": _nullable({"type": "array", "items": {"type": "string"}},
@@ -62,15 +64,17 @@ TOOL_SCHEMAS = [
           "(demand, airfield, regulatory) with KB facts.",
           {"codes": {"type": "array", "items": AIRPORT}}),
     _tool("route_mix",
-          "Share of long-haul departures from an airport over a period. The code picks the data source "
-          "from the period. Periods: 'last_7_days', 'latest' (latest full year), '2025', '2025-Q3', "
-          "'2025-07'. A specific day is not supported.",
+          "Share of long-haul departures from an airport over a period, also weighted by passengers and by "
+          "seats, with all flights incl. cargo, top long-haul destinations and a summer/winter split. The code "
+          "picks the data source from the period. Periods: 'last_7_days', 'latest' (the same 12 months as the "
+          "scores), '2025', '2025-Q3', '2025-07'. A specific day is not supported.",
           {"airport": AIRPORT,
            "period": {"type": "string"},
            "threshold_km": _nullable({"type": "number"}, "null = 4,000 km (A-05)"),
            "include_cargo": {"type": "boolean", "description": "false = passenger aircraft only"}}),
     _tool("demand_signals",
-          "Unmet-demand evidence for one airport: five traces plus capacity loss per hour when documented.",
+          "Unmet-demand evidence for one airport: traces with percentiles, a recovery-gap estimate vs peers, "
+          "capacity loss per hour and its daily upper bound when documented, and timing of constraints vs the data.",
           {"airport": AIRPORT}),
     _tool("get_constraints", "Curated facts for one airport: legal caps, curfews, runway geometry, "
                              "schedule level, each with source and confidence.", {"airport": AIRPORT}),

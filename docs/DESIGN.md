@@ -1,8 +1,8 @@
 # Design
 
-**Question:** where would new U.S. passenger-terminal capacity pay off, and what blocks it?
+**Question:** for a firm investing in U.S. airport modernization: where would a renovation add the most flight and passenger capacity, and so pay off best?
 
-**Thesis:** a terminal pays back per passenger. A good opportunity = many passengers + growing demand + demand pressing on capacity + nothing blocking expansion. More terminal doesn't always mean more flights, so the agent ranks the opportunity **and** names the binding constraint.
+**Thesis:** capacity pays back per passenger and per flight. A good opportunity = many passengers + growing demand + demand pressing on capacity + a bottleneck that money can fix. So the agent ranks the opportunity **and** names the bottleneck, which says *what* to invest in: the terminal, the airfield, or nothing until the rules change.
 
 ```
 question → Claude (agent.py) → tools.py → scoring.py → metrics.py → sources/ → live APIs
@@ -27,14 +27,18 @@ question → Claude (agent.py) → tools.py → scoring.py → metrics.py → so
 
 **Label** (first match wins; kept out of the score because it decides *what* to build):
 
-| Label | Rule | Meaning |
+| Label | Rule | What to invest in |
 |---|---|---|
-| Regulatory | Hard passenger cap, ≥ 85% used | Money can't unlock growth |
-| Airfield | Runway/ATC delay share ≥ p75 of peers, or documented runway geometry | A terminal adds no flights; build for larger aircraft |
-| Terminal | Growth and Pressure ≥ p60 | Best case for terminal capex |
-| None evident | Otherwise | Demand isn't pressing yet |
+| Regulatory | Hard passenger cap, ≥ 85% used | Nothing until the rules change |
+| Airfield | Runway/ATC delay share ≥ p75 of peers, or documented runway geometry | Airfield projects; a bigger terminal alone won't add landings |
+| Terminal | Growth and Pressure ≥ p60 | Terminal expansion |
+| None evident | Otherwise | Monitor; demand isn't pressing yet |
 
-**Flags** (beside the score, never in it): non-hub, borderline peer group, highly seasonal, missing months, cargo-heavy.
+Every label reports the checks behind it (value, percentile, bar, passed or not) and any **near miss** within 5 points of a bar.
+
+**Flags** (beside the score, never in it): non-hub, borderline peer group, highly seasonal, missing months, cargo-heavy, one airline ≥ 50% of seats, ultra-low-cost carriers ≥ 25% of seats, and fast growth from a small 2019 base. Checks that had no data are listed, so "no flags" is only claimed when every check ran.
+
+**"How much" estimates** (labelled as estimates): the recovery gap vs peers (A-24), and lost runway capacity per day as an upper bound (A-10).
 
 ## 2. Where AI is used
 
@@ -61,15 +65,16 @@ Claude (Opus 5.5) understands the question, picks from 7 tools, and explains the
 
 ## 4. Assumptions and uncertainty
 
-- 20 assumptions in `kb/assumptions.yaml` (why, alternatives, sensitivity) and 9 sourced facts in `kb/constraints.yaml` (5 verified, 4 medium confidence). The agent cites both.
+- 27 assumptions in `kb/assumptions.yaml` (why, alternatives, sensitivity) and 10 sourced facts in `kb/constraints.yaml`. The agent cites both; a test checks that every cited ID exists.
 - **Stated in answers, never hidden:**
   - No gate or floor-area data: "demand is pressing", never "terminal is full".
-  - T-100 lags months: every answer states its window.
+  - T-100 lags months: every answer states its window, and the same 12 months are used everywhere (A-26).
+  - Every ranking states how many airports were evaluated, shown and left out, and why.
   - Boardings × 2 ≈ total passengers (within 1% for LAX).
   - Unmet demand isn't observable, so the agent shows indirect traces.
 - **Grounding check limit:** it matches numbers by value, so it catches invented or rounded numbers, not wrong claims without numbers.
-- **Validation:** 76 tests (hand-computed fixtures, live golden tests, offline agent loop); end-to-end eval **8/8, $0.42**. That's one run, so it shows the system works, not a reliability rate.
+- **Validation:** 92 tests (hand-computed fixtures, live golden tests, offline agent loop); end-to-end eval **8/8, $0.42**. That's one run, so it shows the system works, not a reliability rate.
 
 ## 5. Cuts
 
-Voice; the low-cost-carrier flag (data ready, threshold unset); the up-gauging backtest (signal kept display-only); broad generalization testing. Future work: master-plan RAG, gate data, fares.
+Voice; the up-gauging backtest (signal kept display-only); broad generalization testing. Future work: master-plan RAG, gate data, fares.
