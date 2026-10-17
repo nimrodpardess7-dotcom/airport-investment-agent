@@ -27,11 +27,18 @@ EXAMPLES = {
 
 def new_conversation() -> None:
     st.session_state.agent = Agent()
-    st.session_state.history = []   # [{"role", "content", "turn", "seconds"}]
+    st.session_state.history = []     # [{"role", "content", "turn", "seconds", "error"}]
+    st.session_state.pending = None   # the question being answered; while set, every control is disabled
 
 
-def ask_example(question: str) -> None:
-    st.session_state.pending = question
+def ask(question: str) -> None:
+    """Queue a question (from a button or the chat box). Ignored if one is already being answered."""
+    if question and question.strip() and st.session_state.pending is None:
+        st.session_state.pending = question.strip()
+
+
+def submit_chat() -> None:
+    ask(st.session_state.chat_box)
 
 
 def show_markdown(text: str) -> None:
@@ -59,6 +66,8 @@ def show_trust_panel(turn, seconds: float) -> None:
 
 if "agent" not in st.session_state:
     new_conversation()
+busy = st.session_state.pending is not None
+
 
 def month(ym: str) -> str:
     return pd.Period(ym, "M").strftime("%b %Y")   # "2025-05" -> "May 2025"
@@ -68,11 +77,11 @@ def month(ym: str) -> str:
 with st.sidebar:
     st.title("✈️ Airport Investment Agent")
     st.write("Find U.S. airports where new terminal capacity would pay off, and see what blocks growth.")
-    st.button("New conversation", on_click=new_conversation, width="stretch")
+    st.button("New conversation", on_click=new_conversation, width="stretch", disabled=busy)
 
     st.subheader("Try a question")
     for label, question in EXAMPLES.items():
-        st.button(label, on_click=ask_example, args=(question,), width="stretch")
+        st.button(label, on_click=ask, args=(question,), width="stretch", disabled=busy)
 
     st.subheader("Data used")
     with st.spinner("Loading data…"):
@@ -99,25 +108,33 @@ st.header("Ask about U.S. airport terminal investment")
 
 for msg in st.session_state.history:
     with st.chat_message(msg["role"]):
-        show_markdown(msg["content"])
+        if msg.get("error"):
+            st.error(msg["content"])
+        else:
+            show_markdown(msg["content"])
         if msg.get("turn"):
             show_trust_panel(msg["turn"], msg["seconds"])
 
-question = st.chat_input("e.g. Which New England airports should we invest in?") or st.session_state.pop("pending", None)
-if question:
-    st.session_state.history.append({"role": "user", "content": question})
+st.chat_input("Answering…" if busy else "e.g. Which New England airports should we invest in?",
+              key="chat_box", on_submit=submit_chat, disabled=busy)
+
+# Answer the queued question. Controls above are already disabled, so a click can't interrupt it.
+# If something still interrupts the run, Agent.ask rolls the turn back and `finally` unlocks the UI.
+if busy:
+    question = st.session_state.pending
     with st.chat_message("user"):
         show_markdown(question)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Calling tools and checking every number…"):
+    try:
+        with st.chat_message("assistant"), st.spinner("Calling tools and checking every number…"):
             t0 = time.time()
             try:
                 turn = st.session_state.agent.ask(question)
+                reply = {"role": "assistant", "content": turn.answer, "turn": turn, "seconds": time.time() - t0}
             except anthropic.APIError as e:
-                st.error(f"The Claude API returned an error ({type(e).__name__}). Please try again.")
-                st.stop()
-        seconds = time.time() - t0
-        show_markdown(turn.answer)
-        show_trust_panel(turn, seconds)
-    st.session_state.history.append({"role": "assistant", "content": turn.answer, "turn": turn, "seconds": seconds})
+                reply = {"role": "assistant", "error": True,
+                         "content": f"The Claude API returned an error ({type(e).__name__}). "
+                                    "Nothing was lost; please ask again."}
+        st.session_state.history += [{"role": "user", "content": question}, reply]
+    finally:
+        st.session_state.pending = None
+    st.rerun()   # redraw with the controls enabled again

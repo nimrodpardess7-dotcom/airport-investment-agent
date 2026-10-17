@@ -142,6 +142,20 @@ class Agent:
             system=SYSTEM_PROMPT, tools=TOOL_SCHEMAS, messages=self.messages)
 
     def ask(self, question: str) -> Turn:
+        """Answer one question. A turn that doesn't finish normally (interrupted, API error, refusal,
+        too many tool rounds) is rolled back, so the history sent next time is always valid."""
+        mark = (len(self.messages), len(self.evidence))
+        finished = False
+        try:
+            turn = self._run_turn(question)
+            finished = turn.stop_reason in ("end_turn", "stop_sequence")
+            return turn
+        finally:
+            if not finished:
+                del self.messages[mark[0]:]
+                del self.evidence[mark[1]:]
+
+    def _run_turn(self, question: str) -> Turn:
         self.messages.append({"role": "user", "content": question})
         self.evidence.append(question)
         calls, usage = [], {}

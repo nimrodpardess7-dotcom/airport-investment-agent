@@ -23,7 +23,10 @@ class FakeClient:
 
     def _create(self, **kwargs):
         self.requests.append({**kwargs, "messages": list(kwargs["messages"])})
-        return self.responses.pop(0)
+        r = self.responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
 
 
 def test_schemas_are_strict_and_complete():
@@ -91,6 +94,38 @@ def test_refusal_and_round_limit():
     loop = [NS(stop_reason="tool_use", content=[tool_use("get_assumption", {"assumption_id": "A-01"})])]
     fake = FakeClient(loop * agent.MAX_TOOL_ROUNDS)
     assert agent.Agent(client=fake).ask("?").stop_reason == "max_tool_rounds"
+
+
+class Interrupt(Exception):
+    """Stands in for a Streamlit rerun or an API error in the middle of a turn."""
+
+
+def test_interrupted_turn_is_rolled_back_and_chat_continues():
+    # The reported bug: a click mid-answer left a tool request without its result -> every later call 400'd.
+    responses = [
+        NS(stop_reason="end_turn", content=[text("First answer.")]),
+        NS(stop_reason="tool_use", content=[tool_use("get_assumption", {"assumption_id": "A-05"})]),
+        Interrupt("click while answering"),
+        NS(stop_reason="end_turn", content=[text("Third answer.")]),
+    ]
+    a = agent.Agent(client=FakeClient(responses))
+    a.ask("first")
+    before = (list(a.messages), list(a.evidence))
+    try:
+        a.ask("second")
+    except Interrupt:
+        pass
+    assert (a.messages, a.evidence) == before                  # half-finished turn removed
+    assert a.ask("third").answer == "Third answer."             # conversation continues
+    roles = [m["role"] for m in a.messages]
+    assert roles == ["user", "assistant", "user", "assistant"]  # valid history: no orphan tool request
+
+
+def test_refused_or_runaway_turns_leave_no_trace():
+    fake = FakeClient([NS(stop_reason="refusal", content=[])])
+    a = agent.Agent(client=fake)
+    a.ask("?")
+    assert a.messages == [] and a.evidence == []
 
 
 def test_history_is_append_only_across_turns():

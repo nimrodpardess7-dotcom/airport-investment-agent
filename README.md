@@ -1,30 +1,32 @@
 # Airport Investment Agent
 
-A chat agent that answers: **where would new U.S. passenger-terminal capacity pay off, and what blocks it?**
+A chat assistant for one question: **which U.S. airports are worth investing in a new terminal, and what could block it?**
 
-Python computes every number from live public data (deterministic score + binding-constraint label). Claude picks the tools and explains the results. A grounding check flags any number in an answer that no tool produced.
+## What it does
 
-**Example:** *"Compare LAX and Santa Ana"* → Santa Ana is **Regulatory** (92% of its 12.2M legal cap); LAX has no binding constraint (traffic still below 2019).
+Ask in plain English, for example *"Which New England airports are the best candidates?"* It answers with:
 
-## Setup
+- **A score (0–100)** for each airport: how many passengers, how fast traffic is growing, and how full the planes are.
+- **What blocks growth:** a legal cap, the runways, or the terminal itself. Only the last one is fixed by building a terminal.
+- **Where every number came from**, and what the data can't tell you.
+
+## Why you can trust the numbers
+
+The AI (Claude) never calculates. Python computes every number from public U.S. government data, and Claude only explains it. After each answer, a check confirms every number came from the data.
+
+## Try it
 
 ```bash
-python -m venv .venv && .venv/Scripts/activate     # macOS/Linux: source .venv/bin/activate
+python -m venv .venv
+.venv/Scripts/activate          # Mac/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env                                # add ANTHROPIC_API_KEY (OpenSky keys optional)
+cp .env.example .env            # add your ANTHROPIC_API_KEY
+streamlit run app.py
 ```
 
-## Run
+Click one of the example questions in the sidebar.
 
-```bash
-streamlit run app.py              # chat
-python -m pytest                  # 74 tests
-python scripts/run_eval.py        # 8-case eval through Claude (~$0.40)
-```
+## More
 
-## Docs
-
-- [docs/DESIGN.md](docs/DESIGN.md): scoring, tradeoffs, where AI is used, limits
-- [config.yaml](config.yaml) · [kb/](kb/): weights, sourced facts, assumptions (all editable)
-
-Data: BTS T-100 and TranStats, FAA NAS Status, OurAirports, OpenSky (non-commercial).
+- How the score works, the tradeoffs and the limits: [docs/DESIGN.md](docs/DESIGN.md)
+- Tests: `python -m pytest`

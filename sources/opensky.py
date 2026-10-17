@@ -23,11 +23,12 @@ DAY = 86400
 
 def _token() -> str:
     load_dotenv(ROOT / ".env")
+    cid, secret = os.getenv("OPENSKY_CLIENT_ID"), os.getenv("OPENSKY_CLIENT_SECRET")
+    if not cid or not secret:
+        raise RuntimeError("OpenSky keys are not set, so 'last 7 days' data is unavailable. "
+                           "Monthly or yearly data (TranStats) still works.")
     r = httpx.post(TOKEN_URL, timeout=60, data={
-        "grant_type": "client_credentials",
-        "client_id": os.environ["OPENSKY_CLIENT_ID"],
-        "client_secret": os.environ["OPENSKY_CLIENT_SECRET"],
-    })
+        "grant_type": "client_credentials", "client_id": cid, "client_secret": secret})
     r.raise_for_status()
     return r.json()["access_token"]
 

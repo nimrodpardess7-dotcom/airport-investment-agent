@@ -4,11 +4,16 @@ These hit the live APIs (through the cache), so they assert structure and sanity
 Run: python -m pytest tests/test_golden.py
 """
 
+import os
 import re
 
 import pytest
+from dotenv import load_dotenv
 
 import tools
+from config import ROOT
+
+load_dotenv(ROOT / ".env")
 
 SHAPE = {"values", "formula", "sources", "assumptions", "confidence", "caveats"}
 
@@ -68,6 +73,7 @@ def test_q3_unsupported_day_offers_nearest():
     assert v["supported"] == "no" and "2024-03" in v["message"]
 
 
+@pytest.mark.skipif(not os.getenv("OPENSKY_CLIENT_ID"), reason="OpenSky keys not set (optional)")
 def test_q3_last_7_days_has_no_cargo_split():
     res = tools.route_mix("ANC", "last_7_days")
     assert "long_haul_share_all_flights" in res["values"]
