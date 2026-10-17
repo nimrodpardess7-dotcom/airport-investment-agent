@@ -137,7 +137,8 @@ def compare_airports(codes: list[str]) -> dict:
         geometry = [k for k in CONSTRAINTS if k["airport"] == c and k["type"] == "runway"]
         out[c] = {
             **_summary(r),
-            "demand": {"passengers_latest_12m": _millions(r["passengers"]),
+            "demand": {"boardings_latest_12m": _millions(r["passengers"]),
+                       "total_passengers_latest_12m_estimate": _millions(r["passengers"] * CONFIG["passengers_per_enplanement"]),
                        "growth_vs_2019": _signed(r["growth_vs_2019"]), "load_factor": _pct(r["load_factor"]),
                        "upgauging_vs_2019": _signed(r["upgauging"]),
                        "departures_change_vs_2019": _signed(r["departures_change"])},
@@ -149,7 +150,9 @@ def compare_airports(codes: list[str]) -> dict:
         }
     return _result(out, SCORE_FORMULA + " Three kinds of congestion are reported separately.",
                    _score_sources(), SCORE_ASSUMPTIONS + ["A-07", "A-15"],
-                   caveats=["NAS delay share covers reporting airlines only.",
+                   caveats=["T-100 counts boardings (enplanements). Airports and legal caps usually quote total "
+                            "passengers (arriving + departing), estimated here as boardings x 2 (A-07).",
+                            "NAS delay share covers reporting airlines only.",
                             "A soft limit (a planning forecast) is not a legal cap and never fires the Regulatory label."])
 
 
