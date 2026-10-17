@@ -68,7 +68,7 @@ Claude (Opus 5.5) understands the question, picks from 7 tools, and explains the
   - Boardings × 2 ≈ total passengers (within 1% for LAX).
   - Unmet demand isn't observable, so the agent shows indirect traces.
 - **Grounding check limit:** it matches numbers by value, so it catches invented or rounded numbers, not wrong claims without numbers.
-- **Validation:** 74 tests (hand-computed fixtures, live golden tests, offline agent loop); end-to-end eval **8/8, $0.42**. That's one run, so it shows the system works, not a reliability rate.
+- **Validation:** 76 tests (hand-computed fixtures, live golden tests, offline agent loop); end-to-end eval **8/8, $0.42**. That's one run, so it shows the system works, not a reliability rate.
 
 ## 5. Cuts
 
