@@ -82,3 +82,5 @@ cache:
 
 llm:
   model: claude-opus-5-5
+  effort: medium                    # routing questions to tools needs little reasoning; keeps answers fast
+  max_tool_rounds: 8                # safety stop for the tool loop
