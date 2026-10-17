@@ -33,6 +33,11 @@ def table() -> pd.DataFrame:
             "departures_per_runway", "nas_share", "seasonality", "freighter_share", "missing_months"]
     t = pd.DataFrame.from_dict(rows, orient="index", columns=cols)
     t["hub_class"], t["borderline_class"], t["state"] = "medium", False, ["CA", "CA", "MA", "MA"]
+    # Carrier and base-year inputs: only HOT (fast growth, small 2019 base, one ULCC airline) trips the flags.
+    t["passengers_2019"] = [4_000_000, 3_200_000, 100_000, 1_000_000]
+    t["top_carrier"] = ["DL", "UA", "XP", "WN"]
+    t["top_carrier_share"] = [0.30, 0.40, 0.85, 0.35]
+    t["ulcc_share"] = [0.00, 0.05, 1.00, 0.10]
     return t
 
 
@@ -101,7 +106,8 @@ def test_regulatory_beats_everything():
     # CAP: 4.5M boardings x 2 = 9M passengers = 90% of its 10M hard cap (>= 85%).
     out = labelled()
     assert out.loc["CAP", "label"] == "Regulatory"
-    assert "90%" in out.loc["CAP", "label_reasons"][0]
+    ev = out.loc["CAP", "label_evidence"]
+    assert ev[0]["rule"] == "Regulatory" and ev[0]["value"] == "90%" and ev[0]["passed"]
 
 
 def test_soft_cap_never_fires_regulatory():
@@ -112,7 +118,7 @@ def test_soft_cap_never_fires_regulatory():
 def test_airfield_from_runway_geometry():
     out = labelled()
     assert out.loc["GEO", "label"] == "Airfield"
-    assert any("GEO-01" in r for r in out.loc["GEO", "label_reasons"])
+    assert any("GEO-01" in c["metric"] and c["passed"] for c in out.loc["GEO", "label_evidence"])
 
 
 def test_terminal_when_growth_and_pressure_high():
@@ -131,7 +137,8 @@ def test_flags():
     assert any("seasonal" in x for x in f)       # 2.5 >= 2.0 (A-18)
     assert any("missing" in x for x in f)        # 1 missing month (A-19)
     assert any("cargo-heavy" in x for x in f)    # 40% >= 25% (A-20)
-    assert labelled().loc["HOT", "flags"] == []
+    hot = " ".join(labelled().loc["HOT", "flags"])
+    assert "carrier concentration" in hot and "ultra-low-cost" in hot and "low base" in hot
 
 
 def test_scale_is_ranked_nationally_growth_within_group():
@@ -157,3 +164,21 @@ def test_rank_filters_after_national_percentiles():
     assert set(ma.index) == {"HOT", "SOFT"}
     # HOT's percentiles still come from all four airports.
     assert ma.loc["HOT", "scale"] == 50
+
+
+def test_none_evident_says_which_condition_failed():
+    ev = labelled().loc["SOFT", "label_evidence"]
+    terminal = [c for c in ev if c["rule"] == "Terminal"]
+    assert len(terminal) == 2 and not all(c["passed"] for c in terminal)
+    assert {"rule", "metric", "value", "percentile", "threshold", "passed", "display"} <= set(terminal[0])
+
+
+def test_near_miss_reported():
+    # CAP's cap utilization is 90% against an 85% bar: exactly 5 points away (A-21) -> near miss.
+    assert any("cap utilization" in n for n in labelled().loc["CAP", "near_misses"])
+
+
+def test_flag_checks_not_run_when_input_missing():
+    t = table()
+    t.loc["SOFT", "ulcc_share"] = float("nan")
+    assert s.evaluate(t, lens="absolute").loc["SOFT", "flag_checks_not_run"] == ["ultra-low-cost share"]

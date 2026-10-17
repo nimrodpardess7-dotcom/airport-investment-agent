@@ -23,14 +23,19 @@ def build() -> tuple[pd.DataFrame, dict]:
     b22 = m.totals(bts.monthly(f"{mom}-01", f"{mom}-12"), f"{mom}-01", f"{mom}-12")
 
     # Universe (A-03): U.S. airports with more than the minimum enplanements in the latest 12 months.
+    # Airports with traffic but below the line are kept in meta, so rankings can say who was left out.
     us = ourairports.airports()
-    now = now[now.index.isin(us.index) & (now["passengers"] > CONFIG["universe_min_enplanements"])]
+    us_now = now[now.index.isin(us.index) & (now["passengers"] > 0)]
+    below = us_now[us_now["passengers"] <= CONFIG["universe_min_enplanements"]]
+    now = us_now[us_now["passengers"] > CONFIG["universe_min_enplanements"]]
     b19, b22 = b19.reindex(now.index), b22.reindex(now.index)
 
     t = pd.DataFrame(index=now.index)
     t["name"], t["state"], t["runways"] = us["name"], us["state"], us["runways"]
     t["passengers"] = now["passengers"]
+    t["passengers_2019"] = b19["passengers"]
     t["departures"] = now["departures"]
+    t["seats_per_departure"] = m.seats_per_departure(now["seats"], now["departures"])
     # A-19: worst gap across the three 12-month windows (an airport absent in 2019 is missing 12).
     t["missing_months"] = pd.concat([12 - w["months"].fillna(0) for w in (now, b19, b22)], axis=1).max(axis=1)
     t["growth_vs_2019"] = m.growth(now["passengers"], b19["passengers"])
@@ -48,7 +53,13 @@ def build() -> tuple[pd.DataFrame, dict]:
     # Cargo-heavy flag (A-20): freighter share from TranStats, latest full calendar year.
     ts_latest = bts.transtats_latest()
     full_year = int(ts_latest[:4]) if ts_latest.endswith("-12") else int(ts_latest[:4]) - 1
-    t["freighter_share"] = m.freighter_share(bts.segments(full_year)).reindex(t.index)
+    segments = bts.segments(full_year)
+    t["freighter_share"] = m.freighter_share(segments).reindex(t.index)
+
+    # Carrier flags (A-11 ULCC share, A-22 top-carrier share): seats on passenger aircraft, same year.
+    carriers = m.carrier_shares(segments, CONFIG["flags"]["ulcc_carriers"],
+                                include_combi=CONFIG["route_mix"]["combi_counts_as_passenger"])
+    t = t.join(carriers, how="left")
 
     # Peer group (A-02): share of national enplanements within the universe.
     cutoffs = CONFIG["peer_groups"]
@@ -65,5 +76,7 @@ def build() -> tuple[pd.DataFrame, dict]:
         "score_period": (start, end),
         "nas_period": (delays["month"].min(), delays["month"].max()),
         "freighter_year": full_year,
+        "below_universe": pd.DataFrame({"state": us["state"].reindex(below.index),
+                                        "boardings": below["passengers"]}),
     }
     return t, meta

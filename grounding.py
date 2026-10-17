@@ -13,7 +13,7 @@ import re
 SKIP = [
     r"\b\d{4}-\d{2}(?:-\d{2})?\b",         # dates: 2025-05, 2024-03-03
     r"\b\d{1,2}:\d{2}\b",                  # times: 07:00
-    r"\b[A-Za-z]{1,4}-\d+[a-z]?\b",        # ids: A-05, A-06a, SNA-01, LAX-02
+    r"\b[A-Za-z]{1,4}-\d+[a-z]?\b",        # ids: A-05, SNA-01, LAX-02 (a letter suffix is allowed)
     r"\b[A-OQ-Za-oq-z]\d+\b",              # letter-prefixed labels: Q3, (but not p96 percentiles)
     r"\b\d+[LRC]\b",                       # runway names: 28R, 1L
     r"(?m)^\s*\d+\.\s",                    # list markers: "1. "

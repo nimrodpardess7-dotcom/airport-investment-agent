@@ -1,18 +1,22 @@
 # Airport Investment Agent
 
-A chat assistant for one question: **which U.S. airports are worth investing in a new terminal, and what could block it?**
+A chat assistant that helps an airport-modernization investor answer: **where in the U.S. would a renovation add the most flight and passenger capacity, and so pay off best?**
 
 ## What it does
 
-Ask in plain English, for example *"Which New England airports are the best candidates?"* It answers with:
+Ask in plain English, for example *"Which New England airports are strong candidates for expansion?"* For each airport it gives:
 
-- **A score (0–100)** for each airport: how many passengers, how fast traffic is growing, and how full the planes are.
-- **What blocks growth:** a legal cap, the runways, or the terminal itself. Only the last one is fixed by building a terminal.
+- **An opportunity score (0–100):** how many passengers, how fast traffic is growing, and how full the planes already are.
+- **What limits growth, and so what to invest in:**
+  - **Terminal**: demand is pressing on the building → terminal expansion pays.
+  - **Airfield**: runways or airspace are the bottleneck → airfield projects pay; a bigger terminal alone won't add flights.
+  - **Regulatory**: a legal cap binds → capital can't add capacity until the rules change.
+  - **None evident**: demand isn't pressing yet → wait.
 - **Where every number came from**, and what the data can't tell you.
 
 ## Why you can trust the numbers
 
-The AI (Claude) never calculates. Python computes every number from public U.S. government data, and Claude only explains it. After each answer, a check confirms every number came from the data.
+The AI (Claude) never calculates. Python computes every number from public U.S. government data, and Claude only explains it. After each answer, a check confirms that every number came from the data.
 
 ## Try it
 

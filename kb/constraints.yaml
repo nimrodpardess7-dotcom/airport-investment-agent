@@ -1,5 +1,6 @@
 # Facts about airports. Cite as [domain: id]. Every entry needs a source before submission.
-# Fields: id, airport, type (cap | curfew | runway | schedule-level), statement, value, source_url, verified_on, confidence
+# Fields: id, airport, type (cap | curfew | runway | schedule-level | project), statement, value, source_url, verified_on, confidence
+# A `project` is expansion already approved or underway: shown as a fact, never scored.
 # A runway entry whose value has `geometry` set fires the Airfield label directly (PLAN 3, A-15).
 # Only a cap entry with value.annual_passengers and hard: true can fire the Regulatory label (A-12).
 # confidence: verified (official source) | medium (press / secondary) | unverified (seed, no source yet)
@@ -78,7 +79,7 @@
     approaches raised it to 40 per hour from Aug 12, 2026, with 42 planned by the end of August. Not a full restoration.
   # reference/current feed A-10 (capacity loss per hour); the other rates are context.
   value: {reference_arrival_rate: 54, current_arrival_rate: 40, current_since: "2026-08-12",
-          low_arrival_rate: 36, planned_arrival_rate: 42}
+          low_arrival_rate: 36, planned_arrival_rate: 42, effective_date: "2026-03-31"}
   source_url: https://deeparrival.com/news/faa-sfo-arrival-rate-increase-staggered-approaches-august-12-2026/
   verified_on: 2026-10-16
   confidence: medium   # press reports of an FAA email; live FAA feed shows SFO's rate only when SFO has an active event
@@ -105,3 +106,18 @@
   source_url: https://public-inspection.federalregister.gov/2026-20784.pdf
   verified_on: 2026-10-17
   confidence: verified
+
+- id: HVN-01
+  airport: HVN
+  type: project
+  statement: >-
+    An expansion is approved but not yet under construction: the main runway would be extended by nearly
+    1,000 ft (from 5,600 ft) and a new passenger terminal built on the East Haven side. The FAA approved the
+    environmental review in December 2023, and a federal appeals court upheld it on July 21, 2026. State and
+    local permits are still outstanding. Cost about $250M and a 2026 start / 2028 finish (news report,
+    unconfirmed).
+  value: {status: approved_not_started, runway_ft_now: 5600, runway_extension_ft_approx: 1000,
+          approval_upheld: "2026-07-21"}
+  source_url: https://ctmirror.org/2026/07/22/tweed-new-haven-airport-expansion/
+  verified_on: 2026-10-17
+  confidence: verified   # approval and court ruling verified; cost and timeline from news reports

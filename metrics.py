@@ -95,6 +95,30 @@ def freighter_share(segments: pd.DataFrame) -> pd.Series:
     return ratio(dep.get("freighter", 0), dep.sum(axis=1))
 
 
+def carrier_shares(segments: pd.DataFrame, ulcc: list[str], include_combi: bool = True) -> pd.DataFrame:
+    """Per origin: top carrier, its share of seats, and the ultra-low-cost carriers' share (passenger aircraft)."""
+    kinds = ["passenger", "combi"] if include_combi else ["passenger"]
+    seats = segments[segments["aircraft"].isin(kinds)].groupby(["ORIGIN", "UNIQUE_CARRIER"])["SEATS"].sum()
+    seats = seats[seats > 0]
+    total = seats.groupby(level=0).sum()
+    top = seats.groupby(level=0).idxmax().map(lambda key: key[1])
+    ulcc_seats = seats[seats.index.get_level_values(1).isin(ulcc)].groupby(level=0).sum()
+    return pd.DataFrame({"top_carrier": top,
+                         "top_carrier_share": seats.groupby(level=0).max() / total,
+                         "ulcc_share": ulcc_seats.reindex(total.index).fillna(0) / total})
+
+
+def recovery_gap(recovery: float, peer_median: float, base_2019: float) -> float:
+    """A-24 estimate: (peer median recovery - airport recovery) x 2019 base; 0 if the airport kept up."""
+    return max(0.0, peer_median - recovery) * base_2019
+
+
+def capacity_upper_bound(lost_per_hour: float, hours: float, seats_per_departure: float, load_factor: float) -> tuple[float, float]:
+    """A-10 upper bound per day: lost arrivals x hours, and the passengers those flights would carry."""
+    flights = lost_per_hour * hours
+    return flights, flights * seats_per_departure * load_factor
+
+
 # --- Peer group (A-02, A-03) ---------------------------------------------------------------------
 
 HUB_CLASSES = ["large", "medium", "small"]  # order matters: first cutoff met wins; below all -> non-hub

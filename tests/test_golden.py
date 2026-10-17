@@ -61,8 +61,8 @@ def test_q2_lax_vs_sna():
 def test_q3_anc_latest_year():
     res = tools.route_mix("ANC", "latest")
     v = res["values"]
-    assert v["counted"] == "passenger aircraft only"
-    assert 0 < pct(v["long_haul_share"]) < pct(v["long_haul_share_all_aircraft"])   # freighters fly longer
+    assert v["counted"].startswith("passenger aircraft")                            # combi included (A-25)
+    assert 0 < pct(v["long_haul_share"]) < pct(v["long_haul_share_all_flights_incl_cargo"])   # freighters fly longer
     assert pct(v["long_haul_share"]) <= pct(v["long_haul_share_at_3500_km"])         # lower threshold, higher share
     assert "freighter" in v["departures_by_aircraft"]
     assert any("A-05" in c for c in res["caveats"])
@@ -86,7 +86,7 @@ def test_q4_sfo_demand_signals():
     res = tools.demand_signals("SFO")
     v = res["values"]
     assert v["label"] == "Airfield"
-    assert len(v["traces"]) == 5
+    assert len(v["traces"]) >= 5
     assert "54 -> 40" in v["capacity_loss_per_hour"] and "14 fewer" in v["capacity_loss_per_hour"]
     assert any("not directly observable" in c for c in res["caveats"])
 

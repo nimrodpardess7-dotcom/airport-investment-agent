@@ -78,34 +78,69 @@ def _constraints(airport: str, kind: str) -> list[dict]:
     return [c for c in CONSTRAINTS if c["airport"] == airport and c["type"] == kind]
 
 
-def constraint_label(row: pd.Series) -> tuple[str, list[str]]:
-    """Return (label, reasons). Rules in order: Regulatory, Airfield, Terminal, None evident."""
-    airport = row.name
+def _check(rule: str, metric: str, value: str, percentile: str, threshold: str, passed: bool) -> dict:
+    """One label condition, with everything needed to explain it ("display" is the plain sentence)."""
+    if value == "n/a":
+        sentence = f"{rule}: {metric} has no data, so this check can't pass"
+    else:
+        shown = value if percentile in ("n/a", value) else f"{value} ({percentile})"
+        sentence = f"{rule}: {metric} {shown} {'meets' if passed else 'misses'} the {threshold} bar"
+    return {"rule": rule, "metric": metric, "value": value, "percentile": percentile, "threshold": threshold,
+            "passed": bool(passed), "display": sentence}
+
+
+def _pct(x) -> str:
+    return "n/a" if pd.isna(x) else f"p{x:.0f}"
+
+
+def constraint_label(row: pd.Series) -> tuple[str, list[dict], list[str]]:
+    """Return (label, checks, near_misses). Rules in order: Regulatory, Airfield, Terminal, None evident.
+
+    `checks` lists every condition evaluated up to the rule that fired, passed or not, so the answer can
+    say exactly what triggered the label and what didn't. `near_misses` lists checks within A-21 points.
+    """
+    airport, checks, near = row.name, [], []
+    band = LABEL_CFG["near_miss_points"]
+
+    def near_miss(metric: str, value: float, bar: float, unit: str) -> None:
+        if pd.notna(value) and abs(value - bar) <= band:
+            near.append(f"{metric} {value:.0f}{unit} is within {band} points of the {bar:.0f}{unit} bar")
 
     # Regulatory (A-12): a hard passenger cap, and total passengers (A-07) at >= 85% of it.
     for cap in _constraints(airport, "cap"):
         limit = cap["value"].get("annual_passengers")
         if cap["value"].get("hard") and limit:
-            total = row["passengers"] * CONFIG["passengers_per_enplanement"]
-            if total / limit >= LABEL_CFG["regulatory_utilization"]:
-                return "Regulatory", [f"passengers at {total / limit:.0%} of the {limit / 1e6:.1f}M legal cap [{cap['id']}]"]
+            used = row["passengers"] * CONFIG["passengers_per_enplanement"] / limit
+            bar = LABEL_CFG["regulatory_utilization"]
+            checks.append(_check("Regulatory", f"passengers vs the {limit / 1e6:.1f}M legal cap [{cap['id']}]",
+                                 f"{used:.0%}", "n/a", f">= {bar:.0%}", used >= bar))
+            near_miss("cap utilization", used * 100, bar * 100, "%")
+            if used >= bar:
+                return "Regulatory", checks, near
 
     # Airfield (A-14): measured runway/ATC delays, or a documented runway-geometry fact.
-    reasons = []
-    if row["pct_nas_share"] >= LABEL_CFG["airfield_percentile"]:
-        reasons.append(f"runway/ATC (NAS) delay share at p{row['pct_nas_share']:.0f} of peers")
-    for rw in _constraints(airport, "runway"):
-        if rw["value"].get("geometry"):
-            reasons.append(f"runway geometry: {rw['value']['geometry'].replace('_', ' ')} [{rw['id']}]")
-    if reasons:
-        return "Airfield", reasons
+    bar = LABEL_CFG["airfield_percentile"]
+    nas_ok = row["pct_nas_share"] >= bar
+    checks.append(_check("Airfield", "runway/ATC (NAS) delay share",
+                         "n/a" if pd.isna(row["nas_share"]) else f"{row['nas_share']:.1%}",
+                         _pct(row["pct_nas_share"]), f">= p{bar}", nas_ok))
+    near_miss("NAS delay share", row["pct_nas_share"], bar, "th percentile")
+    geometry = [rw for rw in _constraints(airport, "runway") if rw["value"].get("geometry")]
+    for rw in geometry:
+        checks.append(_check("Airfield", f"runway geometry [{rw['id']}]", rw["value"]["geometry"].replace("_", " "),
+                             "n/a", "documented", True))
+    if nas_ok or geometry:
+        return "Airfield", checks, near
 
     # Terminal (A-13): demand is growing and pressing, and nothing above blocks it.
     bar = LABEL_CFG["terminal_percentile"]
+    for comp in ("growth", "pressure"):
+        checks.append(_check("Terminal", comp, _pct(row[comp]), _pct(row[comp]), f">= p{bar}", row[comp] >= bar))
+        near_miss(comp, row[comp], bar, "th percentile")
     if row["growth"] >= bar and row["pressure"] >= bar:
-        return "Terminal", [f"growth p{row['growth']:.0f} and pressure p{row['pressure']:.0f}, both >= p{bar}"]
+        return "Terminal", checks, near
 
-    return "None evident", ["demand is not yet pressing on capacity"]
+    return "None evident", checks, near
 
 
 def upgauging_signature(row: pd.Series) -> bool:
@@ -116,6 +151,12 @@ def upgauging_signature(row: pd.Series) -> bool:
 
 
 # --- 5. Flags (shown next to the score, never inside it) -----------------------------------------
+
+# Each data-dependent flag check and the column it needs. A check whose input is missing didn't run.
+FLAG_INPUTS = {"seasonality": "seasonality", "cargo-heavy": "freighter_share",
+               "carrier concentration": "top_carrier_share", "ultra-low-cost share": "ulcc_share",
+               "low base": "passengers_2019"}
+
 
 def flags(row: pd.Series) -> list[str]:
     out = []
@@ -129,21 +170,38 @@ def flags(row: pd.Series) -> list[str]:
         out.append(f"low confidence: {row['missing_months']:.0f} missing month(s) in a required window")
     if row["freighter_share"] >= FLAG_CFG["cargo_heavy_freighter_share"]:
         out.append(f"cargo-heavy: freighters are {row['freighter_share']:.0%} of departures")
+    if row["top_carrier_share"] >= FLAG_CFG["top_carrier_share_threshold"]:            # A-22
+        out.append(f"carrier concentration: one airline ({row['top_carrier']}) has "
+                   f"{row['top_carrier_share']:.0%} of seats")
+    if row["ulcc_share"] >= FLAG_CFG["ulcc_share_threshold"]:                          # A-11
+        out.append(f"ultra-low-cost carriers have {row['ulcc_share']:.0%} of seats "
+                   "(they fill planes by design, which inflates pressure)")
+    low = FLAG_CFG["low_base"]                                                          # A-23
+    if row["pct_growth_vs_2019"] >= low["growth_min_percentile"] and row["passengers_2019"] < low["max_boardings_2019"]:
+        out.append(f"low base: growth {_pct(row['pct_growth_vs_2019'])} from only "
+                   f"{row['passengers_2019']:,.0f} boardings in 2019")
     return out
+
+
+def flag_checks_not_run(row: pd.Series) -> list[str]:
+    """Flag checks that couldn't run for this airport because their input is missing."""
+    return [name for name, col in FLAG_INPUTS.items() if pd.isna(row[col])]
 
 
 # --- 6. Everything together ----------------------------------------------------------------------
 
 def evaluate(table: pd.DataFrame, weights: dict | None = None, lens: str | None = None) -> pd.DataFrame:
-    """Score every airport nationally, then add label, reasons, flags and the A-09 display.
+    """Score every airport nationally, then add label, evidence, near misses, flags and the A-09 display.
 
     Region filtering happens after this, so percentiles always come from the national peer group.
     """
     out = score(table, weights or lens_weights(lens or SCORE_CFG["default_lens"]))
     labels = out.apply(constraint_label, axis=1)
     out["label"] = labels.str[0]
-    out["label_reasons"] = labels.str[1]
+    out["label_evidence"] = labels.str[1]
+    out["near_misses"] = labels.str[2]
     out["flags"] = out.apply(flags, axis=1)
+    out["flag_checks_not_run"] = out.apply(flag_checks_not_run, axis=1)
     out["upgauging_signature"] = out.apply(upgauging_signature, axis=1)
     return out.sort_values("score", ascending=False)
 

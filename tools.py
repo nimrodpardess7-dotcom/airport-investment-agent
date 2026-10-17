@@ -75,12 +75,27 @@ def _check_code(code: str) -> str | None:
     return None
 
 
+def _raw(row: pd.Series) -> dict:
+    """The magnitudes behind the percentiles, so a reader sees "how much", not only "how it ranks"."""
+    return {
+        "boardings_latest_12m": _millions(row["passengers"]),
+        "growth_vs_2019": f"{_signed(row['growth_vs_2019'])} ({_p(row['pct_growth_vs_2019'])})",
+        "cagr_since_2022": f"{_signed(row['cagr_since_2022'])} a year ({_p(row['pct_cagr_since_2022'])})",
+        "load_factor": f"{_pct(row['load_factor'])} ({_p(row['pct_load_factor'])})",
+        "seats_per_departure_change_vs_2019": f"{_signed(row['upgauging'])} ({_p(row['pct_upgauging'])})",
+        "departures_change_vs_2019": f"{_signed(row['departures_change'])} ({_p(row['pct_departures_change'])})",
+    }
+
+
 def _summary(row: pd.Series) -> dict:
     return {
         "airport": row.name, "name": row["name"], "state": row["state"], "peer_group": row["hub_class"],
         "score": _n(row["score"]), "growth": _p(row["growth"]), "pressure": _p(row["pressure"]),
-        "scale": _p(row["scale"]), "label": row["label"], "label_reasons": row["label_reasons"],
-        "flags": row["flags"],
+        "scale": _p(row["scale"]), "raw": _raw(row),
+        "label": row["label"], "label_evidence": row["label_evidence"], "near_misses": row["near_misses"],
+        "flags": row["flags"], "flag_checks_not_run": row["flag_checks_not_run"],
+        "projects": [f"{k['statement']} [{k['id']}]" for k in CONSTRAINTS
+                     if k["airport"] == row.name and k["type"] == "project"],
     }
 
 
@@ -89,7 +104,9 @@ SCORE_FORMULA = ("score = w_growth x Growth + w_pressure x Pressure + w_scale x 
                  "Pressure = mean percentile of load factor and up-gauging (seats per departure vs 2019); "
                  "Scale = percentile of passengers vs all airports. Growth/Pressure percentiles are within the "
                  "FAA hub-class peer group. Label: first match of Regulatory, Airfield, Terminal, None evident.")
-SCORE_ASSUMPTIONS = ["A-01", "A-02", "A-03", "A-04", "A-12", "A-13", "A-14", "A-16", "A-18", "A-19", "A-20"]
+SCORE_ASSUMPTIONS = ["A-01", "A-02", "A-03", "A-04", "A-11", "A-12", "A-13", "A-14", "A-16", "A-18", "A-19",
+                     "A-20", "A-21", "A-22", "A-23"]
+NORMALIZATION = "Each airport is compared to airports of similar size (FAA hub class); size itself is compared to all airports."
 
 
 def _score_sources() -> list[str]:
@@ -110,16 +127,42 @@ def rank_airports(region: str | None = None, states: list[str] | None = None, le
         used = scoring.validate_weights(weights) if weights else scoring.lens_weights(lens)
     except ValueError as e:
         return _error(str(e))
-    ranked = scoring.rank(_table()[0], states=states, weights=used)
-    rows = [_summary(r) for _, r in ranked.head(top).iterrows()]
+    table, meta = _table()
+    ranked = scoring.rank(table, states=states, weights=used)
+    other_lens = "pressure" if lens == "absolute" and not weights else "absolute"
+    other = scoring.rank(table, states=states, lens=other_lens)
+    other_rank = {code: i + 1 for i, code in enumerate(other.dropna(subset=["score"]).index)}
+
+    scored = ranked.dropna(subset=["score"])
+    no_score = ranked[ranked["score"].isna()]
+    rows = []
+    for _, r in scored.head(top).iterrows():
+        row = _summary(r)
+        row[f"score_{other_lens}_lens"] = _n(other.at[r.name, "score"])
+        row[f"rank_{other_lens}_lens"] = str(other_rank.get(r.name, "n/a"))
+        rows.append(row)
+    not_shown = [{"airport": c, "rank": str(i), "score": _n(r["score"]), "label": r["label"]}
+                 for i, (c, r) in enumerate(scored.iloc[top:].iterrows(), start=top + 1)]
+    unscored = [{"airport": c, "reason": f"{r['missing_months']:.0f} missing months; score n/a (A-19)"}
+                for c, r in no_score.iterrows()]
+    below = meta["below_universe"]
+    below = below[below["state"].isin(states)] if states else below
+    below_list = [{"airport": c, "boardings_latest_12m": _n(b)}
+                  for c, b in below["boardings"].sort_values(ascending=False).items()]
+    summary = (f"{len(ranked)} evaluated, {len(rows)} shown, {len(not_shown)} ranked below the top {top}, "
+               f"{len(unscored)} without a score (missing months); {len(below_list)} more airports have traffic "
+               f"but no more than 10,000 boardings, below the scoring universe (A-03)")
     return _result(
         {"weights_used": {k: f"{v:.2f}" for k, v in used.items()}, "lens": "custom" if weights else lens,
          "region": region or (",".join(states) if states else "national"),
-         "airports_ranked": str(len(ranked)), "ranking": rows},
+         "summary": summary, "evaluated": str(len(ranked)), "shown": str(len(rows)),
+         "ranking": rows, "not_shown": not_shown, "score_not_available": unscored,
+         "below_universe": below_list, "normalization": NORMALIZATION},
         SCORE_FORMULA, _score_sources(), SCORE_ASSUMPTIONS,
         caveats=["No public gate counts or terminal floor area: the agent can say demand is pressing, "
                  "never that a terminal is full.",
-                 "Flags marked 'low confidence' mean the score is less reliable for that airport."])
+                 "Flags marked 'low confidence' mean the score is less reliable for that airport.",
+                 "'flag_checks_not_run' lists checks that had no data; 'no flags' is only true when it is empty."])
 
 
 # --- 2. compare_airports ---------------------------------------------------------------------------
@@ -137,14 +180,14 @@ def compare_airports(codes: list[str]) -> dict:
         geometry = [k for k in CONSTRAINTS if k["airport"] == c and k["type"] == "runway"]
         out[c] = {
             **_summary(r),
-            "demand": {"boardings_latest_12m": _millions(r["passengers"]),
-                       "total_passengers_latest_12m_estimate": _millions(r["passengers"] * CONFIG["passengers_per_enplanement"]),
-                       "growth_vs_2019": _signed(r["growth_vs_2019"]), "load_factor": _pct(r["load_factor"]),
-                       "upgauging_vs_2019": _signed(r["upgauging"]),
-                       "departures_change_vs_2019": _signed(r["departures_change"])},
-            "airfield": {"nas_delay_share": _pct(r["nas_share"]), "nas_delay_share_percentile": _p(r["pct_nas_share"]),
-                         "effective_runways": _n(r["runways"]),
-                         "departures_per_runway_percentile_display_only": _p(r["pct_departures_per_runway"]),
+            "congestion_levels": {
+                "runway_atc_delay_share": f"{_pct(r['nas_share'])} of delay minutes ({_p(r['pct_nas_share'])})",
+                "departures_per_effective_runway": f"{_n(r['departures_per_runway'])} a year "
+                                                   f"({_p(r['pct_departures_per_runway'])})",
+                "load_factor": f"{_pct(r['load_factor'])} ({_p(r['pct_load_factor'])})"},
+            "demand": {"total_passengers_latest_12m_estimate": _millions(r["passengers"] * CONFIG["passengers_per_enplanement"]),
+                       **_raw(r)},
+            "airfield": {"effective_runways": _n(r["runways"]),
                          "runway_facts": [f"{k['statement']} [{k['id']}, {k['confidence']}]" for k in geometry]},
             "regulatory": [f"{k['statement']} [{k['id']}, {k['confidence']}]" for k in caps] or ["none on file"],
         }
@@ -194,28 +237,57 @@ def route_mix(airport: str, period: str = "latest", threshold_km: float | None =
                             "no passenger/cargo split (A-06). For a passenger-only share use a month or year.",
                             "Flights with no estimated destination are excluded from the share and counted above."])
 
-    seg = bts.segments(r.year, r.months[0] if r.months and len(r.months) == 1 else None)
-    seg = seg[seg["ORIGIN"] == airport]
-    if r.months:
-        seg = seg[seg["MONTH"].isin(r.months)]
+    seg = _segments(airport, r.months)
     if seg.empty:
         return _error(f"No T-100 departures from {airport} in {r.label}.")
-    dep_by_type = seg.groupby("aircraft")["DEPARTURES_PERFORMED"].sum()
-    passenger = seg[seg["aircraft"] == "passenger"]
-    chosen = seg if include_cargo else passenger
-    km, dep = chosen["distance_km"], chosen["DEPARTURES_PERFORMED"]
+    passenger_kinds = ["passenger", "combi"] if ROUTE_CFG["combi_counts_as_passenger"] else ["passenger"]
+    chosen = seg if include_cargo else seg[seg["aircraft"].isin(passenger_kinds)]
+
+    def share(df, weight, thr=threshold):
+        return _pct(m.long_haul_share(df["distance_km"], df[weight], thr))
+
+    long = chosen[chosen["distance_km"] > threshold]
+    top5 = (long.groupby(["DEST", "DEST_COUNTRY"]).agg(departures=("DEPARTURES_PERFORMED", "sum"),
+                                                       km=("distance_km", "mean"))
+            .sort_values("departures", ascending=False).head(5))
+    seasons = {}
+    for name, months in ROUTE_CFG["seasons"].items():           # A-27
+        part = chosen[chosen["MONTH"].isin(months)]
+        seasons[name] = share(part, "DEPARTURES_PERFORMED") if not part.empty else "n/a (not in window)"
     return _result(
-        {"window": r.label, "counted": "all aircraft" if include_cargo else "passenger aircraft only",
-         "long_haul_share": _pct(m.long_haul_share(km, dep, threshold)),
-         f"long_haul_share_at_{alt}_km": _pct(m.long_haul_share(km, dep, alt)),
-         "long_haul_share_all_aircraft": _pct(m.long_haul_share(seg["distance_km"], seg["DEPARTURES_PERFORMED"], threshold)),
-         "departures_by_aircraft": {k: _n(v) for k, v in dep_by_type.items()},
-         "distance_buckets": {k: _n(v) for k, v in m.distance_buckets(km, dep).items()}},
-        "departures over the threshold / all departures in the set (departure-weighted, great-circle distance)",
-        [f"BTS TranStats T-100 Segment (all carriers), {r.label}"], ["A-05", "A-06"], "high",
+        {"window": r.label, "counted": "all aircraft" if include_cargo else "passenger aircraft (incl. combi)",
+         "unit": "departures (flights); passenger- and seat-weighted shares shown too",
+         "long_haul_share": share(chosen, "DEPARTURES_PERFORMED"),
+         "long_haul_share_by_passengers": share(chosen, "PASSENGERS"),
+         "long_haul_share_by_seats": share(chosen, "SEATS"),
+         f"long_haul_share_at_{alt}_km": share(chosen, "DEPARTURES_PERFORMED", alt),
+         "long_haul_share_all_flights_incl_cargo": share(seg, "DEPARTURES_PERFORMED"),
+         "departures_by_aircraft": {k: _n(v) for k, v in seg.groupby("aircraft")["DEPARTURES_PERFORMED"].sum().items()},
+         "top_long_haul_destinations": [{"destination": f"{d} ({c})", "departures": _n(row["departures"]),
+                                         "distance_km": _n(row["km"])} for (d, c), row in top5.iterrows()],
+         "seasonal": {f"{k}_long_haul_share": v for k, v in seasons.items()},
+         "distance_buckets": {k: _n(v) for k, v in m.distance_buckets(chosen["distance_km"],
+                                                                      chosen["DEPARTURES_PERFORMED"]).items()}},
+        "departures over the threshold / all departures in the set (great-circle distance); "
+        "passenger and seat shares weight each route by passengers or seats instead",
+        [f"BTS TranStats T-100 Segment (all carriers), {r.label}"], ["A-05", "A-06", "A-25", "A-26", "A-27"], "high",
         base_caveats + ["Passenger vs freighter comes from the aircraft configuration each airline files (exact).",
+                        "'latest' is the same 12 months as the airport scores (A-26).",
                         "Very small operators that don't file T-100 are missing; they fly short hops, so the "
                         "long-haul share is biased slightly upward."])
+
+
+def _segments(airport: str, months: list[str]) -> pd.DataFrame:
+    """TranStats segments from `airport` for the given months, across calendar years if needed."""
+    years = sorted({mo[:4] for mo in months})
+    parts = []
+    for y in years:
+        one_month = [mo for mo in months if mo.startswith(y)]
+        df = bts.segments(int(y), int(one_month[0][5:]) if len(months) == 1 else None)
+        parts.append(df[df["ORIGIN"] == airport])
+    seg = pd.concat(parts)
+    ym = seg["YEAR"].astype(int).astype(str) + "-" + seg["MONTH"].astype(int).map("{:02d}".format)
+    return seg[ym.isin(months)]
 
 
 # --- 4. demand_signals -----------------------------------------------------------------------------
@@ -225,34 +297,83 @@ def demand_signals(airport: str) -> dict:
     if err := _check_code(airport):
         return _error(err)
     airport = airport.upper()
-    r = _evaluated().loc[airport]
+    ev = _evaluated()
+    r = ev.loc[airport]
     level = [k for k in CONSTRAINTS if k["airport"] == airport and k["type"] == "schedule-level"]
     live = faa.status(airport)
+
+    def trace(value: str, pct, meaning: str) -> dict:
+        return {"value": value, "percentile": _p(pct), "meaning": meaning}
+
     traces = {
-        "1_load_factor": f"{_pct(r['load_factor'])} ({_p(r['pct_load_factor'])} of peers)",
-        "2_upgauging_vs_departures": (f"seats per departure {_signed(r['upgauging'])} vs 2019 while departures "
-                                      f"{_signed(r['departures_change'])}; A-09 signature: "
-                                      f"{'yes' if r['upgauging_signature'] else 'no'} (display-only)"),
-        "3_passengers_vs_flights_since_2019": (f"passengers {_signed(r['growth_vs_2019'])}, "
-                                               f"departures {_signed(r['departures_change'])}"),
-        "4_schedule_level": [f"{k['statement']} [{k['id']}, {k['confidence']}]" for k in level] or ["none on file"],
-        "5_live_delay_programs": _live_text(live),
+        "load_factor": trace(_pct(r["load_factor"]), r["pct_load_factor"], "how full planes are"),
+        "seats_per_departure_vs_2019": trace(_signed(r["upgauging"]), r["pct_upgauging"], "bigger planes"),
+        "departures_vs_2019": trace(_signed(r["departures_change"]), r["pct_departures_change"], "more or fewer flights"),
+        "passengers_vs_2019": trace(_signed(r["growth_vs_2019"]), r["pct_growth_vs_2019"], "traffic recovery"),
+        "runway_atc_delay_share": trace(_pct(r["nas_share"]), r["pct_nas_share"], "delays caused by runways/airspace"),
+        "upgauging_signature_A09": "yes" if r["upgauging_signature"] else "no (display-only)",
+        "schedule_level": [f"{k['statement']} [{k['id']}, {k['confidence']}]" for k in level] or ["none on file"],
+        "live_delay_programs": _live_text(live),
     }
-    values = {"airport": airport, "label": r["label"], "label_reasons": r["label_reasons"], "traces": traces}
-    caveats = ["Unmet demand is not directly observable; these are indirect traces.",
-               "Up-gauging also reflects fleet strategy and pilot shortages (A-09)."]
+    values = {"airport": airport, "label": r["label"], "label_evidence": r["label_evidence"],
+              "near_misses": r["near_misses"], "traces": traces}
+
+    # How much (A-24): passengers missing vs the peer group's recovery since 2019, in boardings and flights.
+    peers = ev[ev["hub_class"] == r["hub_class"]]
+    median = peers["growth_vs_2019"].median()
+    gap = m.recovery_gap(r["growth_vs_2019"], median, r["passengers_2019"])
+    per_flight = r["seats_per_departure"] * r["load_factor"]
+    values["recovery_gap_estimate"] = {
+        "airport_recovery_vs_2019": _signed(r["growth_vs_2019"]),
+        "peer_median_recovery_vs_2019": _signed(median),
+        "boardings": _millions(gap), "departures_equivalent": _n(gap / per_flight),
+        "label": "estimate (A-24): peer recovery minus this airport's, times its 2019 boardings"}
+
+    caveats = ["Unmet demand is not directly observable; these are indirect traces and two estimates.",
+               "Up-gauging also reflects fleet strategy and pilot shortages (A-09).",
+               "The recovery gap assumes the airport would have recovered like its peers; other causes "
+               "(e.g. weaker routes) would also widen it (A-24)."]
     rates = [k for k in CONSTRAINTS if k["airport"] == airport and "reference_arrival_rate" in k["value"]]
     if rates:
-        v = rates[0]["value"]
+        v, hours = rates[0]["value"], CONFIG["capacity"]["operating_hours_per_day"]
         lost, share = m.capacity_loss_per_hour(v["reference_arrival_rate"], v["current_arrival_rate"])
+        flights, pax = m.capacity_upper_bound(lost, hours, r["seats_per_departure"], r["load_factor"])
         values["capacity_loss_per_hour"] = (f"{v['reference_arrival_rate']} -> {v['current_arrival_rate']} arrivals "
                                             f"per hour = {lost} fewer ({_pct(share)}) [{rates[0]['id']}]")
+        values["capacity_loss_upper_bound"] = {
+            "hours": f"{hours} hours a day (A-10)", "arrivals_per_day": _n(flights),
+            "passengers_per_day": _n(pax), "passengers_per_year": _millions(pax * 365),
+            "label": "upper bound: every lost clear-weather slot filled all day, at today's "
+                     f"{_n(r['seats_per_departure'])} seats per flight and {_pct(r['load_factor'])} load factor"}
         values["live_arrival_rate"] = _n(live["arrival_rate"]) if live["arrival_rate"] else "not reported now"
-        caveats.append("Capacity loss is per hour in clear weather from documented rates; no daily extrapolation (A-10).")
-    return _result(values, "five traces from T-100 metrics, the KB and FAA live status; capacity loss = "
-                           "reference rate - current rate",
+        caveats.append("The capacity-loss figure is an upper bound (A-10): low visibility and off-peak hours "
+                       "make the real loss smaller.")
+
+    values["timing"] = _timing(airport)
+    return _result(values, "traces from T-100 metrics, the KB and FAA live status; recovery gap = (peer median "
+                           "recovery - airport recovery) x 2019 boardings; capacity upper bound = lost arrivals per "
+                           "hour x hours x seats per flight x load factor",
                    [_table()[1]["score_window"], "kb/constraints.yaml", "FAA NAS Status (live)"],
-                   ["A-04", "A-09", "A-10", "A-16"], "medium", caveats)
+                   ["A-04", "A-09", "A-10", "A-16", "A-24"], "medium", caveats)
+
+
+def _timing(airport: str) -> dict:
+    """Data window end vs each dated constraint: how much of the window reflects it."""
+    end = _table()[1]["score_period"][1]
+    out = []
+    for k in CONSTRAINTS:
+        date = k["airport"] == airport and k["value"].get("effective_date")
+        if not date:
+            continue
+        months = (pd.Period(end, "M") - pd.Period(date[:7], "M")).n
+        if months < 0:
+            note = f"takes effect after the data window ends ({end}): not reflected in the traffic data"
+        elif months < 12:
+            note = f"only about {months} month(s) of the 12-month data window (to {end}) reflect it"
+        else:
+            note = ""
+        out.append({"id": k["id"], "effective": str(date), "note": note})
+    return {"data_window_end": end, "constraints": out}
 
 
 def _live_text(s: dict) -> str:

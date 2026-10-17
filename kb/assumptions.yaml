@@ -57,8 +57,8 @@
   alternatives_considered: >-
     Guessing cargo from callsign prefixes (dropped in Phase 0, decision D2). It missed about half of ANC
     freighter departures, and a carrier like Cathay flies only freighters at ANC but passengers at SFO,
-    so no single list works for every airport.
-  sensitivity: null
+    so no single list works for every airport. Replaces the retired A-06a (callsign list).
+  sensitivity: Combi aircraft (passengers + cargo) count as passenger aircraft, see A-25.
   owner: Nimrod
   last_reviewed: null
 
@@ -94,21 +94,27 @@
 
 - id: A-10
   statement: >-
-    Lost arrival capacity = reference arrival rate - current arrival rate, per hour, both from documented
-    sources (kb/constraints.yaml). The live FAA rate is shown alongside when FAA lists the airport.
-  value: {unit: arrivals_per_hour}
-  why: Investors want a number. Per hour needs no guess about operating hours (decision D4).
-  alternatives_considered: Multiplying by operating hours for a daily figure (dropped; needs an extra, hard-to-defend guess).
-  sensitivity: Clear-weather rates only; low-visibility rates are lower.
+    Lost arrival capacity = (reference arrival rate - current arrival rate) per hour, from documented sources
+    (kb/constraints.yaml), times operating hours per day, shown as an UPPER BOUND. Converted to passengers
+    with the airport's average seats per departure x load factor (latest 12 months).
+  value: {operating_hours_per_day: 17}
+  why: >-
+    Investors want a number. 17 hours = 06:00-23:00, the FAA's designated hours for SFO and LAX as
+    Level 2 airports. It's an upper bound because it assumes every lost clear-weather slot would be filled
+    all day; low-visibility hours and off-peak demand make the real loss smaller.
+  alternatives_considered: Per hour only (decision D4); reversed in the review because the register promised an upper bound.
+  sensitivity: Linear in hours; 12 peak hours instead of 17 cuts the estimate by about 30%.
   owner: Nimrod
   last_reviewed: null
 
 - id: A-11
-  statement: ULCC flag threshold, as a share of seats.
-  value: null   # set in Phase 1
-  why: ULCCs run high load factors by design, which inflates the pressure signal.
-  alternatives_considered: null
-  sensitivity: null
+  statement: >-
+    Flag an airport when ultra-low-cost carriers (Spirit, Frontier, Allegiant, Sun Country, Avelo, Breeze)
+    hold at least 25% of its seats (TranStats, latest full year, passenger aircraft).
+  value: {threshold: 0.25, carriers: [NK, F9, G4, SY, XP, MX]}
+  why: ULCCs run high load factors by design, which inflates the pressure signal. 25% is about p90 of airports.
+  alternatives_considered: The narrower list without Avelo and Breeze (misses HVN, which is 100% Avelo).
+  sensitivity: Which airlines count as ULCC is itself a judgment.
   owner: Nimrod
   last_reviewed: null
 
@@ -192,5 +198,73 @@
   why: The score uses the Socrata summary, which mixes freighters into departures and seats per departure. At cargo hubs (ANC) that distorts pressure and up-gauging, so it is flagged rather than hidden (decision D1).
   alternatives_considered: Scoring every airport from TranStats passenger-only data (dropped; slower first run and less stable source).
   sensitivity: Recheck the cut in Phase 1 against known cargo hubs (ANC, MEM, SDF) vs passenger airports.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-21
+  statement: A label check within 5 points of its bar (percentile points, or utilization percentage points) is reported as a near miss.
+  value: 5
+  why: A label that would flip with a small change in the data should say so.
+  alternatives_considered: No near-miss reporting (hides fragile labels).
+  sensitivity: Wider bands report more near misses; the label itself never changes.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-22
+  statement: Flag carrier concentration when one airline holds at least 50% of an airport's seats (TranStats, latest full year).
+  value: 0.50
+  why: Demand that depends on one airline can leave with it. 50% is about the top quarter of airports.
+  alternatives_considered: Herfindahl index (harder to explain for one flag).
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-23
+  statement: Flag "low base" when growth is at or above p90 of peers but the airport had fewer than 250,000 boardings in 2019.
+  value: {growth_min_percentile: 90, max_boardings_2019: 250000}
+  why: A large percentage on a small base can come from one new airline, not lasting demand.
+  alternatives_considered: null
+  sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-24
+  statement: >-
+    Recovery gap (an estimate, not a measurement) = (median recovery vs 2019 of the airport's peer group
+    - the airport's recovery) x the airport's 2019 boardings. Zero when the airport recovered at least as
+    well as its peers.
+  value: null
+  why: Gives "how much" demand is missing relative to similar airports, in passengers.
+  alternatives_considered: Comparing with the national median (mixes airport sizes).
+  sensitivity: Treats peer recovery as what the airport would have done without its constraint; other causes (e.g. weak routes) would also widen the gap.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-25
+  statement: Combi aircraft (carrying passengers and cargo) count in the passenger view of route mix.
+  value: true
+  why: They carry passengers through the terminal.
+  alternatives_considered: Excluding them (they are a small share; ANC 2025 had 800 of about 88,000 departures).
+  sensitivity: Small.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-26
+  statement: >-
+    One time window everywhere: "latest" means the latest 12 months of the T-100 summary that powers the
+    score. Route mix uses the same 12 months from TranStats (which is published monthly, so it can match).
+  value: null
+  why: Q1 used the latest 12 months but Q3 used calendar 2025; two windows in one session confused answers.
+  alternatives_considered: The freshest 12 months of each source (TranStats runs about 3 months ahead).
+  sensitivity: Fresher route data is available; it's not used for "latest" so that answers line up.
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-27
+  statement: Seasons for route mix are summer = June-August and winter = December-February, taken from the 12-month window.
+  value: {summer: [6, 7, 8], winter: [12, 1, 2]}
+  why: Meteorological seasons; within one 12-month window each season has exactly three months.
+  alternatives_considered: Quarters (Q3 / Q1).
+  sensitivity: null
   owner: Nimrod
   last_reviewed: null

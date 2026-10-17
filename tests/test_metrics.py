@@ -139,6 +139,28 @@ def test_distance_buckets():
                                            "4,000-8,000 km": 3, "> 8,000 km": 4}
 
 
+# --- carriers and estimates ---
+
+def test_carrier_shares():
+    seg = pd.DataFrame({"ORIGIN": ["AAA"] * 3, "UNIQUE_CARRIER": ["XP", "XP", "DL"],
+                        "aircraft": ["passenger", "combi", "passenger"], "SEATS": [60, 20, 20]})
+    s = m.carrier_shares(seg, ["XP"]).loc["AAA"]
+    assert s["top_carrier"] == "XP" and s["top_carrier_share"] == pytest.approx(80 / 100)
+    assert s["ulcc_share"] == pytest.approx(80 / 100)
+    assert m.carrier_shares(seg, ["XP"], include_combi=False).loc["AAA", "top_carrier_share"] == pytest.approx(60 / 80)
+
+
+def test_recovery_gap():
+    # Peers recovered +2%, airport -4%: gap 6 points of a 1,000,000 base = 60,000.
+    assert m.recovery_gap(-0.04, 0.02, 1_000_000) == pytest.approx(60_000)
+    assert m.recovery_gap(0.05, 0.02, 1_000_000) == 0
+
+
+def test_capacity_upper_bound():
+    flights, pax = m.capacity_upper_bound(14, 17, 170, 0.8)
+    assert flights == 14 * 17 and pax == pytest.approx(14 * 17 * 170 * 0.8)
+
+
 # --- airfield capacity ---
 
 def test_capacity_loss_per_hour():
