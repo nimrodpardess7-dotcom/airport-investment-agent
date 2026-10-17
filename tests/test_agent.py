@@ -47,7 +47,7 @@ def test_loop_runs_tool_then_answers():
     # The tool result went back to Claude in one user message, and was kept as evidence.
     result_msg = fake.requests[1]["messages"][-1]
     assert result_msg["role"] == "user" and result_msg["content"][0]["tool_use_id"] == "tu_1"
-    assert "A-05" in json.loads(a.evidence[1])["values"]["id"]   # evidence[0] is the question
+    assert "A-05" in json.loads(a.evidence[-1])["values"]["id"]  # [question, tool input, tool result]
     assert turn.unverified_numbers == []                          # 4,000 is in the tool result
 
 
@@ -61,6 +61,17 @@ def test_invented_number_is_flagged_on_the_turn():
     for r in fake.requests:
         assert r["fallbacks"] == "default" and r["cache_control"] == {"type": "ephemeral"}
         assert r["output_config"] == {"effort": agent.EFFORT}
+
+
+def test_numbers_from_tool_inputs_are_traceable():
+    # Live run: the agent wrote "your 0.70 / 0.35 / 0.30", the weights it passed in. Not invented.
+    fake = FakeClient([
+        NS(stop_reason="tool_use", content=[tool_use("rank_airports", {
+            "region": "new_england", "states": None, "lens": "absolute",
+            "weights": {"growth": 0.70, "pressure": 0.35, "scale": 0.30}, "top": 5})]),
+        NS(stop_reason="end_turn", content=[text("Your 0.70 / 0.35 / 0.30 weights were normalized.")]),
+    ])
+    assert agent.Agent(client=fake).ask("growth twice as much?").unverified_numbers == []
 
 
 def test_tool_error_is_reported_not_hidden():

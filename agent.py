@@ -159,6 +159,7 @@ class Agent:
             results = []
             for block in (b for b in response.content if b.type == "tool_use"):
                 calls.append((block.name, block.input))
+                self.evidence.append(json.dumps(block.input))   # inputs are shown to the user, so traceable
                 try:
                     content, is_error = json.dumps(run_tool(block.name, block.input), ensure_ascii=False), False
                 except Exception as e:  # a tool failure goes back to Claude as an error, never hidden

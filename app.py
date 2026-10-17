@@ -10,6 +10,7 @@ import time
 import anthropic
 import streamlit as st
 
+import grounding
 import tools
 from agent import Agent
 
@@ -48,6 +49,8 @@ def show_trust_panel(turn, seconds: float) -> None:
             st.markdown("**No tools called.**")
         if turn.unverified_numbers:
             st.warning("Numbers not found in any tool result: " + ", ".join(turn.unverified_numbers))
+        elif not grounding.numbers(turn.answer):
+            st.info("Grounding check: this answer contains no numbers to check.")
         else:
             st.success("Grounding check: every number in this answer was traced to a tool result.")
         st.caption(f"{seconds:.0f} s · ${turn.cost_usd:.3f} · stop: {turn.stop_reason}")
