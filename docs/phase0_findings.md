@@ -11,7 +11,7 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
 |---|---|---|---|
 | 1 | TranStats T-100 route-level at runtime | ✅ Works. One year: 6.3 MB zip, 571k rows, ~31–36 s. One month: 0.56 MB, ~7 s. Data through **Jul 2026**. | Use it for route mix (Q3) and ULCC. Cache one file per year. |
 | 2 | TranStats delay causes at runtime | ✅ Works. 12 months: 0.9 MB zip, 22k rows, ~5 s. Through **Jul 2026**, 369 airports. | Keep NAS delay share in the Airfield rule (not cut). |
-| 3 | T-100 publication lag | Socrata `r495-tyji`: latest **Apr 2026** (~6-month lag). TranStats: latest **Jul 2026** (~3-month lag). No missing months 2014–2025. | **Decision D1.** Today "latest 12 months" on Socrata = May 2025 – Apr 2026. |
+| 3 | T-100 publication lag | Socrata `r495-tyji`: latest **Apr 2026** (~6-month lag). TranStats: latest **Jul 2026** (~3-month lag). No missing months 2014–2025. | Decided in D1. Today "latest 12 months" on Socrata = May 2025 – Apr 2026. |
 | 4 | OpenSky ANC, last 7 days | ✅ Works (OAuth). 2,129 PANC departures Oct 8–14, 2026. **~2-day limit per request** → 4 calls, ~0.5–1 s each, 30 credits each (4,000/day). 16.3% have no destination. | Use only for "last 7 days". Correct PLAN's "max 7-day window" to "7 days fetched as 2-day chunks". |
 | 5 | FAA NAS Status | ✅ Works, no key, ~0.2 s. Arrival rate + runway config exist, **but only for airports currently listed** (SFO wasn't listed at test time). | A-10 uses KB rates (SFO-02) as the reference; the live rate is shown only when present. |
 | 6 | Airport × carrier data | ✅ Available via TranStats route-level (not via Socrata). | Keep the ULCC flag; set A-11 in Phase 1. |
@@ -80,7 +80,7 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
 | "Passenger" | 25.2% (callsign rule) | 11.4% (`AIRCRAFT_CONFIG` = passenger) |
 
   The totals agree, which validates both sources. The passenger split doesn't: the callsign rule leaves freighters from Cathay (CPA), China Airlines (CAL), Korean (KAL), EVA, Alaska Central Express (AER), China Southern (CSG) and others in the "passenger" bucket. OpenSky also includes private/GA flights (N-registrations), which T-100 doesn't.
-- **Conclusion:** OpenSky is fine for "what flew out of ANC this week". It isn't reliable for a passenger-only share. See D2.
+- **Conclusion:** OpenSky is fine for "what flew out of ANC this week". It isn't reliable for a passenger-only share. See D2 below.
 
 ## 5. FAA NAS Status — `faa_nas.py`
 
@@ -134,18 +134,16 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
 
 ---
 
-## Decisions for Nimrod
+## Decisions (Nimrod, 2026-10-17)
 
-- **D1. Which T-100 feed powers the score?**
-  - (a) **Socrata summary.** Instant SoQL, but data only through Apr 2026, and departures include freighters.
-  - (b) **TranStats route-level for everything.** Through Jul 2026 and passenger-only departures/seats via `AIRCRAFT_CONFIG`, but the first run downloads ~4 yearly files (~2–3 min), then the cache is used.
-  - *Recommendation:* (a) for the score, keeping the plan simple. Add a "cargo-heavy airport" low-confidence flag (freight share from the Socrata freight columns). Use (b) for route mix and ULCC.
-- **D2. Cargo rule (A-06a).**
-  - *Recommendation:* use `AIRCRAFT_CONFIG` for any month/season/year query, and keep callsign prefixes **only** for the OpenSky 7-day path.
-  - For that path, extend the list with carriers that fly only freighters through ANC: CPA, CAL, KAL, EVA, CAO, AAR, AER, CSG. Mixed-fleet AS remains a stated gap.
-  - The OpenSky test confirms the need: the callsign rule gives a 25.2% passenger long-haul share vs 11.4% from aircraft config.
-- **D3. NAS delay share:** keep it in the Airfield rule (data works), with its "reporting carriers only" caveat. *Recommendation: keep.*
-- **D4. A-10 reference rate:** use the KB (SFO-02) for both reference and current rates, and show the live FAA rate only when present. *Recommendation: yes.*
-- **D5. SNA tier:** accept 12.2M with 12.5M as the alternative (the label is robust), or keep looking for the county's 2026 determination. *Recommendation: accept, and say so in the answer.*
+| # | Question | Decision | Why |
+|---|---|---|---|
+| D1 | Which T-100 feed powers the score? | **Socrata summary** for the score; **TranStats route-level** only for route mix (Q3), ULCC share and the cargo-heavy flag (A-20, freighters >= 25% of departures). | The score runs on every question, so it sits on the stable, instant API. TranStats adds the detail only where a question needs it. Freighter distortion at cargo hubs is flagged, not hidden. |
+| D2 | How to spot cargo flights? | **TranStats `AIRCRAFT_CONFIG`** gives the exact passenger/cargo split for any month, season or year. OpenSky "last 7 days" reports **all flights, no split**. The callsign list (old A-06a) is **deleted**. | Callsigns missed ~50% of ANC freighters (25.2% vs 11.4% passenger long-haul). Cathay or Korean fly only freighters at ANC but passengers at SFO, so no single list is right everywhere. |
+| D3 | Keep NAS delay share in the Airfield rule? | **Keep**, with the caveat "reporting airlines only". | Most direct, measured evidence of runway/ATC congestion. One 5-second download, one division. |
+| D4 | How to express lost SFO capacity (A-10)? | **Per hour**: KB rate 54 -> 40 (-14 arrivals/hour), plus the live FAA rate when FAA lists SFO. **No daily extrapolation.** | Two documented numbers and a subtraction; a daily figure would need an operating-hours guess. |
+| D5 | SNA cap tier? | Use **12.2M**, mention **12.5M** as unconfirmed. Stop searching. | SNA is Regulatory either way (91.6% vs 89.4% of the cap). |
+
+Applied to: `docs/PLAN.md`, `CLAUDE.md`, `config.yaml` (callsign list removed; A-20 added; OpenSky 2-day request limit), `kb/assumptions.yaml` (A-06, A-10 rewritten; A-06a removed; A-20 added).
 
 **Still open:** SFO IATA Level 2 source; SNA curfew hours against the ordinance.

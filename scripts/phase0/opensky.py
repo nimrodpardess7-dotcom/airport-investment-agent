@@ -44,7 +44,9 @@ def main() -> None:
         return save("opensky", result)
 
     config = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
-    cargo_prefixes = set(config["route_mix"]["cargo_callsign_prefixes"])
+    # The Phase 0 callsign list (old A-06a), kept here only to reproduce the test; removed from config by D2.
+    cargo_prefixes = {"FDX", "UPS", "GTI", "PAC", "CKS", "ABX", "ATN", "WGN", "CLX", "NCA", "CKK", "CAO",
+                      "CSS", "NAC", "LYC"}
     long_km, alt_km = config["route_mix"]["long_haul_km"], config["route_mix"]["long_haul_km_sensitivity"]
 
     with httpx.Client(timeout=120, headers=UA) as client:

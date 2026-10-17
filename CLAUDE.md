@@ -32,28 +32,30 @@ Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source 
 | Label | Rule |
 |---|---|
 | Regulatory | Hard **passenger** cap in `constraints.yaml` **and** passengers (A-07) ≥ 85% of it (A-12). Other caps/curfews are facts only, never triggers |
-| Airfield | Departures per *effective* runway ≥ p75 of peers (A-14), **or** NAS delay share ≥ p75 (if available), **or** A-09 signature (up-gauging ≥ p75 **and** departures change vs 2019 ≤ p50), **or** a runway-geometry entry in `constraints.yaml` |
+| Airfield | Departures per *effective* runway ≥ p75 of peers (A-14), **or** NAS delay share ≥ p75 (reporting airlines only), **or** A-09 signature (up-gauging ≥ p75 **and** departures change vs 2019 ≤ p50), **or** a runway-geometry entry in `constraints.yaml` |
 | Terminal | Growth ≥ p60 **and** Pressure ≥ p60 (A-13), and nothing above fired |
 | None evident | Otherwise |
 
 Effective runway (A-15) = open **and** ≥ 5,000 ft. Close-parallel/crossing geometry lives in `constraints.yaml`, not code.
 
-**Flags** (beside the score, never in it): low confidence (non-hub; seasonal = peak/trough month ≥ 2.0 (A-18); ≥1 missing month, component n/a if >3 missing (A-19)); ULCC share high (A-11, if airport×carrier data exists); live disruption (active GDP / ground stop).
+**Flags** (beside the score, never in it): low confidence (non-hub; seasonal = peak/trough month ≥ 2.0 (A-18); ≥1 missing month, component n/a if >3 missing (A-19)); cargo-heavy = freighters ≥ 25% of departures (A-20); ULCC share high (A-11, airport×carrier seats from TranStats); live disruption (active GDP / ground stop).
 
 ## Data
 
 | Source | Use |
 |---|---|
-| BTS T-100 Segment Summary by origin (Socrata `data.bts.gov`, id `r495-tyji`, no key) | Monthly departures, passengers, seats, LF, distance, intl share |
-| FAA NAS Status (`nasstatus.faa.gov`, no key) | Live delays, GDPs, ground stops, runway config, arrival rate. Not listed = no active event |
-| OpenSky (OAuth client credentials) | Departures with estimated destination, **≤7-day window**, recent only. ICAO codes (PANC) mapped via OurAirports. Count and report null destinations. Non-commercial free tier |
-| OurAirports CSV | State, coordinates, runway count |
-| TranStats route-level T-100, delay causes | ⚠️ Runtime fetchability unverified (Phase 0) |
+| BTS T-100 Segment Summary by origin (Socrata `data.bts.gov`, id `r495-tyji`, no key) | **Powers the score.** Monthly departures, passengers, seats, LF, distance, intl share. No carrier/aircraft type: freighters mixed in → cargo-heavy flag |
+| TranStats T-100 Segment All Carriers (form download, no key) | Route × carrier × `AIRCRAFT_CONFIG`. Route mix for any month/season/year with an **exact passenger/cargo split**; ULCC share; cargo-heavy flag. ~6 MB / ~35 s per year, cached |
+| TranStats delay causes (form download, no key) | NAS delay share for the Airfield rule. Reporting airlines only |
+| FAA NAS Status (`nasstatus.faa.gov`, no key) | Live delays, GDPs, ground stops, runway config, arrival rate. Only airports with an active event are listed |
+| OpenSky (OAuth client credentials) | "Last 7 days" only: departures with estimated destination. ~2 days per request → 7 days in chunks. **All flights, no passenger/cargo split.** ICAO codes (PANC) via OurAirports. Count and report null destinations. Non-commercial free tier |
+| OurAirports CSV | State, coordinates, runways |
 
-- Live calls + local TTL cache in `.cache/`. Aggregate server-side with SoQL; never pull millions of rows.
+- Live calls + local TTL cache in `.cache/`. Aggregate Socrata server-side with SoQL; never pull millions of rows.
+- Phase 0 results and decisions D1–D5: `docs/phase0_findings.md`.
 - Known gaps (state them in answers): no gate counts or terminal sq ft ("demand is pressing", never "terminal is full"); no live route-level API; T-100 lags a few months; no fares.
 
-**Period → source routing** (in `routing.py`): last 7 days → OpenSky; month/season/year → TranStats route-level if Phase 0 confirms, else T-100 summary as an explicitly stated approximation; specific past day / anything else → unsupported, offer nearest period.
+**Period → source routing** (in `routing.py`): last 7 days → OpenSky (all flights); month/season/year → TranStats route-level; specific past day / anything else → unsupported, offer nearest period.
 
 ## Knowledge base (`kb/`)
 
@@ -64,9 +66,9 @@ Effective runway (A-15) = open **and** ≥ 5,000 ft. Close-parallel/crossing geo
 ## The four questions
 
 1. **New England terminal candidates:** `rank_airports(region="new_england")`, both lenses + constraint label. Must say: BOS wins on scale, pressure lens surfaces mid-size airports, no gate data.
-2. **LAX vs SNA congestion:** `compare_airports`, `get_constraints`. Separate airfield / demand / regulatory. SNA is capped by law (agreement to 2030); LAX limit is soft.
-3. **% long-haul out of ANC:** `route_mix("ANC", period, include_cargo)`. State definition (A-05, >4,000 km; 3,500 km sensitivity), window, source, passenger vs cargo split (cargo by callsign prefix, A-06a; mixed-fleet airlines are a known gap), upward bias from missing small Alaskan flights.
-4. **SFO unmet demand:** `demand_signals`, `get_constraints`, `live_status`. Unmet demand isn't observable: show five traces + A-10 upper-bound estimate. Airfield-limited; lever is gauge.
+2. **LAX vs SNA congestion:** `compare_airports`, `get_constraints`. Separate airfield / demand / regulatory. SNA is capped by law at 12.2M (12.5M tier unconfirmed; Regulatory either way; agreement to 2030); LAX limit is soft.
+3. **% long-haul out of ANC:** `route_mix("ANC", period, include_cargo)`. State definition (A-05, >4,000 km; 3,500 km sensitivity), window, source, passenger vs cargo split from TranStats `AIRCRAFT_CONFIG` (A-06; a 7-day OpenSky answer gives all flights only), upward bias from missing small Alaskan flights.
+4. **SFO unmet demand:** `demand_signals`, `get_constraints`, `live_status`. Unmet demand isn't observable: show five traces + A-10 capacity loss per hour (KB 54 → 40, plus live FAA rate when listed; no daily extrapolation). Airfield-limited; lever is gauge.
 
 ## Agent design
 
@@ -96,4 +98,4 @@ Layout: `sources/` (bts, faa, opensky, ourairports, cache) · `metrics.py` · `s
 - Secrets in `.env` (gitignored); `.env.example` lists `ANTHROPIC_API_KEY`, `OPENSKY_CLIENT_ID`, `OPENSKY_CLIENT_SECRET`.
 - Commit after every phase with a clear message. Don't start a phase until Nimrod says so.
 - Build split: Claude Code writes `sources/`, `tools.py`, `agent.py`, `app.py`. Nimrod reviews `scoring.py` and the label rules line by line before they're committed.
-- Nimrod must be able to defend every line: keep code simple and explicit.
+- Nimrod must be able to defend every line: keep code simple and explicit. **Prefer the simple option; avoid complicated machinery.**

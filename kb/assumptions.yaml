@@ -48,20 +48,17 @@
   last_reviewed: null
 
 - id: A-06
-  statement: Route mix counts passenger flights only by default; cargo is shown separately, identified by an operator callsign list in config.
+  statement: >-
+    Route mix counts passenger aircraft only by default; cargo is shown separately. The split comes from
+    TranStats AIRCRAFT_CONFIG (filed by the airline), so it is exact for any month, season or year.
+    OpenSky "last 7 days" answers report all flights only, with no passenger/cargo split.
   value: {include_cargo_default: false}
   why: The client invests in passenger terminals. ANC cargo would distort the answer.
-  alternatives_considered: null
+  alternatives_considered: >-
+    Guessing cargo from callsign prefixes (dropped in Phase 0, decision D2). It missed about half of ANC
+    freighter departures, and a carrier like Cathay flies only freighters at ANC but passengers at SFO,
+    so no single list works for every airport.
   sensitivity: null
-  owner: Nimrod
-  last_reviewed: null
-
-- id: A-06a
-  statement: Cargo is identified by the ICAO callsign prefix of cargo-only operators (list in config).
-  value: [FDX, UPS, GTI, PAC, CKS, ABX, ATN, WGN, CLX, NCA, CKK, CAO, CSS, NAC, LYC]
-  why: Callsign is the only operator signal OpenSky returns for every flight.
-  alternatives_considered: OpenSky aircraft metadata (freighter types) as a second check, if it's available.
-  sensitivity: Airlines that fly both passengers and freighters use one callsign for both, so their freighters get counted as passenger flights. Phase 0 measures the gap on one week of ANC departures; every prefix to be verified.
   owner: Nimrod
   last_reviewed: null
 
@@ -93,11 +90,13 @@
   last_reviewed: null
 
 - id: A-10
-  statement: Lost arrival capacity is approximately (reference arrival rate - current arrival rate) x operating hours, shown as an upper bound.
-  value: null
-  why: Investors want a number. It is labeled as an estimate, never a measurement.
-  alternatives_considered: null
-  sensitivity: null
+  statement: >-
+    Lost arrival capacity = reference arrival rate - current arrival rate, per hour, both from documented
+    sources (kb/constraints.yaml). The live FAA rate is shown alongside when FAA lists the airport.
+  value: {unit: arrivals_per_hour}
+  why: Investors want a number. Per hour needs no guess about operating hours (decision D4).
+  alternatives_considered: Multiplying by operating hours for a daily figure (dropped; needs an extra, hard-to-defend guess).
+  sensitivity: Clear-weather rates only; low-visibility rates are lower.
   owner: Nimrod
   last_reviewed: null
 
@@ -179,5 +178,14 @@
   why: A partial year biases both growth and load factor.
   alternatives_considered: null
   sensitivity: null
+  owner: Nimrod
+  last_reviewed: null
+
+- id: A-20
+  statement: An airport is flagged "cargo-heavy" (low confidence) when freighter departures are at least 25% of all departures in the latest full year (TranStats AIRCRAFT_CONFIG).
+  value: 0.25
+  why: The score uses the Socrata summary, which mixes freighters into departures and seats per departure. At cargo hubs (ANC) that distorts pressure and up-gauging, so it is flagged rather than hidden (decision D1).
+  alternatives_considered: Scoring every airport from TranStats passenger-only data (dropped; slower first run and less stable source).
+  sensitivity: Recheck the cut in Phase 1 against known cargo hubs (ANC, MEM, SDF) vs passenger airports.
   owner: Nimrod
   last_reviewed: null
