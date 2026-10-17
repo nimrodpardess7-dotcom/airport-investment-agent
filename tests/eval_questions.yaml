@@ -1,0 +1,73 @@
+# End-to-end eval: the agent answers in plain English; code checks the answer.
+# Run: python scripts/run_eval.py   (uses the Claude API: costs money, about $0.40)
+#
+# Each case:
+#   turns         questions asked in one session; only the LAST answer is checked
+#   tools         every tool listed must be called during the last turn
+#   no_tools      true = the last turn must call no tools (ask, don't guess)
+#   must_include  each entry is a regex (case-insensitive) that must appear in the last answer
+# Every case also requires a clean grounding check (no unverified numbers).
+
+# --- The four assignment questions -----------------------------------------------------------------
+
+- id: q1_new_england
+  turns: ["Which airports in New England are the best candidates for new terminal investment?"]
+  tools: [rank_airports]
+  must_include:
+    - "HVN"                      # top candidate
+    - "BOS"                      # wins on scale, but...
+    - "Airfield"                 # ...is runway-limited
+    - "gate|floor area"          # no gate data, said out loud
+
+- id: q2_lax_vs_sna
+  turns: ["Compare congestion at LAX and Santa Ana. What kind of constraint does each face?"]
+  tools: [compare_airports]
+  must_include:
+    - "Regulatory"
+    - "12\\.2"                   # SNA legal cap
+    - "SNA-01"                   # cited KB fact
+    - "forecast|soft|not a (legal |hard )?cap"   # LAX's 78.9M is not a cap
+
+- id: q3_anc_long_haul
+  turns: ["What percentage of flights out of Anchorage are long-haul?"]
+  tools: [route_mix]
+  must_include:
+    - "11\\.4%"                  # passenger aircraft, > 4,000 km
+    - "4,000"                    # definition stated
+    - "freight|cargo"            # passenger vs cargo split
+    - "2025"                     # data window stated
+
+- id: q4_sfo_unmet_demand
+  turns: ["SFO seems to have unmet demand. How much, and why?"]
+  tools: [demand_signals]
+  must_include:
+    - "Airfield|runway"
+    - "54"
+    - "40"
+    - "not (directly )?observable|can't be (seen|measured)|indirect"
+
+# --- Edge cases ------------------------------------------------------------------------------------
+
+- id: followup_memory
+  turns: ["Which airports in New England are the best candidates for new terminal investment?",
+          "and Hartford?"]
+  tools: []
+  must_include: ["BDL"]          # follow-up resolved to Hartford = BDL from the session
+
+- id: what_if_weights
+  turns: ["Rank the New England airports for terminal investment.",
+          "What if growth matters twice as much?"]
+  tools: [rank_airports]
+  must_include: ["0\\.52"]       # normalized growth weight reported from the tool
+
+- id: ambiguous_name
+  turns: ["How is Portland doing as a terminal investment?"]
+  no_tools: true
+  must_include: ["PWM", "PDX"]   # asks which Portland, never guesses
+
+- id: unanswerable
+  turns: ["How many gates does PVD have?"]
+  tools: []
+  must_include:
+    - "gate"
+    - "no public|not available|isn't available|don't have|do not have|not in|can't|cannot"
