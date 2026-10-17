@@ -1,29 +1,30 @@
-# airport-investment-agent
+# Airport Investment Agent
 
-AI agent for airport terminal investment analysis: live aviation data, deterministic scoring, transparent reasoning.
+A chat agent that answers: **where would new U.S. passenger-terminal capacity pay off, and what blocks it?**
 
-Python computes every number; the LLM only narrates, tagging each claim as `[data]`, `[domain]` or `[assumption]`.
+Python computes every number from live public data (deterministic score + binding-constraint label). Claude picks the tools and explains the results. A grounding check flags any number in an answer that no tool produced.
 
-> Status: scaffold only (Phase -1). See [docs/PLAN.md](docs/PLAN.md) for the spec and phases.
+**Example:** *"Compare LAX and Santa Ana"* → Santa Ana is **Regulatory** (92% of its 12.2M legal cap); LAX has no binding constraint (traffic still below 2019).
 
 ## Setup
 
 ```bash
-python -m venv .venv
-.venv/Scripts/activate   # Windows; on macOS/Linux: source .venv/bin/activate
+python -m venv .venv && .venv/Scripts/activate     # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env     # then fill in the keys
+cp .env.example .env                                # add ANTHROPIC_API_KEY (OpenSky keys optional)
 ```
 
-## Layout
+## Run
 
-| Path | Purpose |
-|---|---|
-| `sources/` | API clients (BTS T-100, FAA NAS Status, OpenSky, OurAirports) + TTL cache |
-| `metrics.py`, `scoring.py` | Metrics, Opportunity Score, Binding Constraint label |
-| `routing.py` | Deterministic period → data source |
-| `tools.py`, `agent.py` | Agent tools and Claude tool-calling loop with grounding check |
-| `app.py` | Streamlit chat |
-| `config.yaml` | Weights and thresholds |
-| `kb/` | `constraints.yaml` (facts), `assumptions.yaml` (judgment calls) |
-| `tests/` | Unit and golden tests |
+```bash
+streamlit run app.py              # chat
+python -m pytest                  # 74 tests
+python scripts/run_eval.py        # 8-case eval through Claude (~$0.40)
+```
+
+## Docs
+
+- [docs/DESIGN.md](docs/DESIGN.md): scoring, tradeoffs, where AI is used, limits
+- [config.yaml](config.yaml) · [kb/](kb/): weights, sourced facts, assumptions (all editable)
+
+Data: BTS T-100 and TranStats, FAA NAS Status, OurAirports, OpenSky (non-commercial).
