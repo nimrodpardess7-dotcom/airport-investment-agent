@@ -3,7 +3,7 @@
 A manual tool-use loop, kept short on purpose so every step is visible:
   1. send the conversation + tool schemas to Claude
   2. if Claude asks for tools, run them in Python and send the results back
-  3. repeat until Claude answers; then the grounding check verifies every number (step 3 of Phase 2)
+  3. repeat until Claude answers; then grounding.check() lists any number not found in the evidence
 
 The history is append-only (the model's reasoning blocks must be passed back unchanged).
 """
@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import anthropic
 from dotenv import load_dotenv
 
+import grounding
 import tools
 from config import CONFIG, ROOT
 
@@ -104,7 +105,7 @@ class Agent:
     def __init__(self, client: anthropic.Anthropic | None = None):
         self.client = client or anthropic.Anthropic()
         self.messages: list = []
-        self.tool_results: list[str] = []   # evidence for the grounding check, whole session
+        self.evidence: list[str] = []   # tool results + user messages, whole session (grounding check)
 
     def _call(self):
         return self.client.beta.messages.create(
@@ -115,6 +116,7 @@ class Agent:
 
     def ask(self, question: str) -> Turn:
         self.messages.append({"role": "user", "content": question})
+        self.evidence.append(question)
         calls = []
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._call()
@@ -124,7 +126,7 @@ class Agent:
                 return Turn("I can't help with that request.", calls, stop_reason="refusal")
             if response.stop_reason != "tool_use":
                 answer = "\n".join(b.text for b in response.content if b.type == "text").strip()
-                return Turn(answer, calls, stop_reason=response.stop_reason)
+                return Turn(answer, calls, grounding.check(answer, self.evidence), response.stop_reason)
 
             results = []
             for block in (b for b in response.content if b.type == "tool_use"):
@@ -133,7 +135,7 @@ class Agent:
                     content, is_error = json.dumps(run_tool(block.name, block.input), ensure_ascii=False), False
                 except Exception as e:  # a tool failure goes back to Claude as an error, never hidden
                     content, is_error = f"{type(e).__name__}: {e}", True
-                self.tool_results.append(content)
+                self.evidence.append(content)
                 results.append({"type": "tool_result", "tool_use_id": block.id,
                                 "content": content, "is_error": is_error})
             self.messages.append({"role": "user", "content": results})  # all results in one message

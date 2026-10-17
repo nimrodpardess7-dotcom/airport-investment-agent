@@ -47,7 +47,16 @@ def test_loop_runs_tool_then_answers():
     # The tool result went back to Claude in one user message, and was kept as evidence.
     result_msg = fake.requests[1]["messages"][-1]
     assert result_msg["role"] == "user" and result_msg["content"][0]["tool_use_id"] == "tu_1"
-    assert "A-05" in json.loads(a.tool_results[0])["values"]["id"]
+    assert "A-05" in json.loads(a.evidence[1])["values"]["id"]   # evidence[0] is the question
+    assert turn.unverified_numbers == []                          # 4,000 is in the tool result
+
+
+def test_invented_number_is_flagged_on_the_turn():
+    fake = FakeClient([
+        NS(stop_reason="tool_use", content=[tool_use("get_assumption", {"assumption_id": "A-05"})]),
+        NS(stop_reason="end_turn", content=[text("Long-haul means over 5,500 km.")]),
+    ])
+    assert agent.Agent(client=fake).ask("?").unverified_numbers == ["5,500"]
     # Every request carries the stable prefix and the agreed settings.
     for r in fake.requests:
         assert r["fallbacks"] == "default" and r["cache_control"] == {"type": "ephemeral"}
