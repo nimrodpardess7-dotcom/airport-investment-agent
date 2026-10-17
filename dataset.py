@@ -61,5 +61,9 @@ def build() -> tuple[pd.DataFrame, dict]:
         "nas_window": f"TranStats delay causes, {delays['month'].min()} to {delays['month'].max()} (reporting airlines only)",
         "freighter_window": f"TranStats T-100 segments, calendar {full_year}",
         "airports_in_universe": len(t),
+        # Plain fields for display (app sidebar).
+        "score_period": (start, end),
+        "nas_period": (delays["month"].min(), delays["month"].max()),
+        "freighter_year": full_year,
     }
     return t, meta

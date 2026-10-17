@@ -8,6 +8,7 @@ Under each answer, "How this answer was built" shows the tool calls, the groundi
 import time
 
 import anthropic
+import pandas as pd
 import streamlit as st
 
 import grounding
@@ -59,26 +60,39 @@ def show_trust_panel(turn, seconds: float) -> None:
 if "agent" not in st.session_state:
     new_conversation()
 
+def month(ym: str) -> str:
+    return pd.Period(ym, "M").strftime("%b %Y")   # "2025-05" -> "May 2025"
+
+
 # --- Sidebar ---------------------------------------------------------------------------------------
 with st.sidebar:
     st.title("✈️ Airport Investment Agent")
-    st.caption("Where would new U.S. passenger-terminal capacity pay off, and what blocks it?")
+    st.write("Find U.S. airports where new terminal capacity would pay off, and see what blocks growth.")
+    st.button("New conversation", on_click=new_conversation, width="stretch")
 
     st.subheader("Try a question")
     for label, question in EXAMPLES.items():
         st.button(label, on_click=ask_example, args=(question,), width="stretch")
 
-    st.subheader("Data windows")
+    st.subheader("Data used")
     with st.spinner("Loading data…"):
         meta = tools._table()[1]
-    for key in ("score_window", "nas_window", "freighter_window"):
-        st.caption(meta[key])
-    st.caption(f"{meta['airports_in_universe']} U.S. airports scored · live FAA status · OpenSky (last 7 days)")
+    (s, e), (ns, ne) = meta["score_period"], meta["nas_period"]
+    st.caption("The same data behind every answer:")
+    st.markdown(
+        f"- **Traffic and scores:** {month(s)} – {month(e)}, compared with 2019 and 2022\n"
+        f"- **Delay causes:** {month(ns)} – {month(ne)}\n"
+        f"- **Passenger vs cargo flights:** {meta['freighter_year']}\n"
+        f"- **Live:** FAA delays right now; flights in the last 7 days\n"
+        f"- **{meta['airports_in_universe']} U.S. airports** scored")
+    st.caption("Sources: U.S. DOT (BTS), FAA, OpenSky Network, OurAirports")
 
-    st.divider()
-    st.button("New conversation", on_click=new_conversation, width="stretch")
-    st.caption("Python computes every number; Claude explains it. Each claim is tagged "
-               "[data], [domain] or [assumption]. Scores are deterministic and reproducible.")
+    with st.expander("How it works"):
+        st.markdown(
+            "- **Python computes every number**; Claude picks the tools and explains the results.\n"
+            "- **Every answer is checked:** each number must come from the data, or it is flagged.\n"
+            "- **Tags show where a claim comes from:** `[data]` = live data, `[domain]` = a sourced fact, "
+            "`[assumption]` = a judgment call you can question.")
 
 # --- Chat ------------------------------------------------------------------------------------------
 st.header("Ask about U.S. airport terminal investment")
