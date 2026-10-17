@@ -9,6 +9,7 @@ Three feeds, each with one job (decisions D1-D3 in docs/phase0_findings.md):
 3. TranStats delay causes: NAS delay share for the Airfield rule (reporting airlines only).
 """
 
+import hashlib
 import io
 import json
 import re
@@ -29,7 +30,8 @@ TIMEOUT = 600
 
 def _soql(params: dict) -> list[dict]:
     url = f"{SRC['bts_base_url']}/{SRC['bts_t100_dataset']}.json"
-    key = "bts/" + re.sub(r"[^A-Za-z0-9]+", "_", json.dumps(params, sort_keys=True))[:150] + ".json"
+    # Cache key = hash of the full query, so different windows never share a file.
+    key = "bts/" + hashlib.sha1(json.dumps(params, sort_keys=True).encode()).hexdigest()[:16] + ".json"
 
     def fetch() -> bytes:
         r = httpx.get(url, params={f"${k}": v for k, v in params.items()}, headers=HEADERS, timeout=TIMEOUT)
