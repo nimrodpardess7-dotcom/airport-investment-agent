@@ -76,7 +76,9 @@
     Since March 31, 2026 the FAA no longer allows side-by-side landings at SFO, even in clear weather.
     Clear-weather arrival capacity fell from 54 to 36 per hour (also reduced by runway repaving). Staggered
     approaches raised it to 40 per hour from Aug 12, 2026, with 42 planned by the end of August. Not a full restoration.
-  value: {arrival_rate_before: 54, arrival_rate_low: 36, arrival_rate_aug_12_2026: 40, arrival_rate_planned_end_aug_2026: 42}
+  # reference/current feed A-10 (capacity loss per hour); the other rates are context.
+  value: {reference_arrival_rate: 54, current_arrival_rate: 40, current_since: "2026-08-12",
+          low_arrival_rate: 36, planned_arrival_rate: 42}
   source_url: https://deeparrival.com/news/faa-sfo-arrival-rate-increase-staggered-approaches-august-12-2026/
   verified_on: 2026-10-16
   confidence: medium   # press reports of an FAA email; live FAA feed shows SFO's rate only when SFO has an active event
@@ -84,8 +86,22 @@
 - id: SFO-03
   airport: SFO
   type: schedule-level
-  statement: SFO is an IATA Level 2 (schedule-facilitated) airport.
+  statement: >-
+    SFO is an FAA-designated IATA Level 2 (schedule-facilitated) airport since Summer 2012, citing runway
+    capacity and delays; still listed for Summer 2027 (designated hours 06:00-23:00 Pacific). Airlines'
+    schedules are reviewed on a voluntary basis.
+  value: {iata_level: 2, since: 2012}
+  source_url: https://public-inspection.federalregister.gov/2026-20784.pdf
+  verified_on: 2026-10-17
+  confidence: verified
+
+- id: LAX-02
+  airport: LAX
+  type: schedule-level
+  statement: >-
+    LAX is an FAA-designated IATA Level 2 (schedule-facilitated) airport, still listed for Summer 2027
+    (designated hours 06:00-23:00 Pacific). Voluntary schedule review, not a cap.
   value: {iata_level: 2}
-  source_url: null
-  verified_on: null
-  confidence: unverified
+  source_url: https://public-inspection.federalregister.gov/2026-20784.pdf
+  verified_on: 2026-10-17
+  confidence: verified

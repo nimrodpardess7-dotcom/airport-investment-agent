@@ -130,7 +130,7 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
   - Staggered approaches raised it to **40/hr on Aug 12, 2026**, with **42 planned by the end of August** ([Deep Arrival, citing an FAA email via SFGATE](https://deeparrival.com/news/faa-sfo-arrival-rate-increase-staggered-approaches-august-12-2026/)).
   - **Correction to PLAN:** it was 40/42 in August, not "45 in October".
   - Not confirmed in an FAA primary source; confidence: medium.
-- **SFO IATA Level 2:** not checked yet; still unverified.
+- **SFO IATA Level 2:** verified in Phase 1 via the FAA Federal Register notice for Summer 2027 (LAX is Level 2 too).
 
 ---
 
@@ -146,4 +146,4 @@ Re-run any script with `.venv/Scripts/python scripts/phase0/<name>.py` (from `sc
 
 Applied to: `docs/PLAN.md`, `CLAUDE.md`, `config.yaml` (callsign list removed; A-20 added; OpenSky 2-day request limit), `kb/assumptions.yaml` (A-06, A-10 rewritten; A-06a removed; A-20 added).
 
-**Still open:** SFO IATA Level 2 source; SNA curfew hours against the ordinance.
+**Still open:** SNA curfew hours against the county ordinance (confidence: medium). SFO and LAX IATA Level 2 verified in Phase 1 (FAA notice for Summer 2027).

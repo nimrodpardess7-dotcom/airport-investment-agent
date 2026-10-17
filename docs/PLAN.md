@@ -156,7 +156,7 @@ Each entry has: `id`, `statement`, `value`, `why`, `alternatives_considered`, `s
 - **SFO**
   - Parallel runways are 750 ft apart.
   - Since Mar 31, 2026 the FAA bans side-by-side landings. Clear-weather arrivals fell 54 → 36 per hour, then rose to 40 on Aug 12, 2026 (42 planned). The live FAA rate appears only when SFO has an active event.
-  - IATA Level 2 (schedule-facilitated): still to source.
+  - IATA Level 2 (schedule-facilitated) since 2012, still listed for Summer 2027 (FAA Federal Register notice). LAX is Level 2 too.
 
 ---
 
