@@ -61,7 +61,7 @@ Rules are checked in this order. The first one that matches wins.
 | Label | Rule | Meaning for the investor |
 |---|---|---|
 | **Regulatory** | A hard **passenger** cap exists in `constraints.yaml` **and** passengers (A-07) ≥ 85% of it. Other caps (daily departures, loading bridges, curfew) are shown as facts and do not trigger the label. | Money can't unlock it. Watch the legal or political timeline. |
-| **Airfield** | Departures per *effective* runway ≥ p75 of peer group (A-14), **or** NAS delay share ≥ p75 (reporting airlines only), **or** the constraint signature fires (hypothesis A-09), **or** a runway-geometry entry exists in `constraints.yaml` | A terminal adds no flights. The lever is gauge: widebody gates and bigger holdrooms. |
+| **Airfield** | Departures per *effective* runway ≥ p75 of peer group (A-14), **or** NAS delay share ≥ p75 (reporting airlines only), **or** a runway-geometry entry exists in `constraints.yaml`. The A-09 up-gauging signature is shown as evidence but never triggers the label (decided before Phase 1: only measured or documented evidence fires a label). | A terminal adds no flights. The lever is gauge: widebody gates and bigger holdrooms. |
 | **Terminal** | Growth ≥ p60 **and** Pressure ≥ p60 (A-13), and neither rule above fires | Best case for terminal capex. |
 | **None evident** | Otherwise | Demand isn't pressing on capacity yet. |
 
@@ -131,7 +131,7 @@ Each entry has: `id`, `statement`, `value`, `why`, `alternatives_considered`, `s
 | A-06 | Route mix counts passenger aircraft only by default; cargo is shown separately. The split comes from TranStats `AIRCRAFT_CONFIG`. OpenSky (last 7 days) reports all flights, no split. | The client invests in passenger terminals. ANC cargo would distort the answer. Callsign guessing was tested and dropped (D2): it missed about half of ANC freighters. |
 | A-07 | Total passengers ≈ enplanements × 2 | Legal caps count everyone passing through; T-100 counts only boarding passengers |
 | A-08 | "LA" = LAX; "Santa Ana" = SNA (John Wayne) | SNA's code belongs to Santa Ana. The agent offers to add BUR, LGB and ONT. |
-| A-09 | **Hypothesis:** up-gauging ≥ p75 of peers **and** departures change vs 2019 ≤ p50 of peers signals an airfield constraint | Airlines up-gauge when they can't add flights. **Must be validated in Phase 1** (see section 8): fleet strategy and pilot shortages also drive up-gauging. |
+| A-09 | **Hypothesis:** up-gauging ≥ p75 of peers **and** departures change vs 2019 ≤ p50 of peers signals an airfield constraint. **Display-only**, never a label trigger. | Airlines up-gauge when they can't add flights, but fleet strategy and pilot shortages also drive up-gauging, so it's shown as a trace and backtested (section 8), not used as proof. |
 | A-10 | Lost arrival capacity = reference arrival rate − current arrival rate, **per hour**, from `constraints.yaml`; the live FAA rate is added when FAA lists the airport. | Investors want a number. Per hour needs no operating-hours guess (D4). |
 | A-11 | ULCC flag threshold = __% of seats | Set in Phase 1 |
 | A-12 | Utilization trigger for the Regulatory label = 85% of the cap | Judgment |

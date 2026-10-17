@@ -85,7 +85,10 @@
   value: {upgauging_min_percentile: 75, departures_change_max_percentile: 50}
   why: Airlines up-gauge when they can't add flights.
   alternatives_considered: null
-  sensitivity: Fleet strategy and pilot shortages also drive up-gauging. Must be validated by the Phase 1 backtest; dropped from the Airfield rule if it fails.
+  sensitivity: >-
+    Fleet strategy and pilot shortages also drive up-gauging, so it is display-only: shown as a trace,
+    never a trigger for the Airfield label. The Phase 1 backtest reports how well it separates known
+    constrained airports.
   owner: Nimrod
   last_reviewed: null
 

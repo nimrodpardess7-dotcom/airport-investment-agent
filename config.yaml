@@ -20,8 +20,8 @@ constraint_label:
   regulatory_utilization: 0.85      # A-12: passengers (A-07) / hard passenger cap
   airfield_percentile: 75           # A-14: departures per effective runway, within peer group
   terminal_percentile: 60           # A-13: growth AND pressure, within peer group
-  upgauging_signature:              # A-09 hypothesis; set enabled: false if the Phase 1 backtest fails
-    enabled: true
+  upgauging_signature:              # A-09 hypothesis: display-only, never triggers the label
+    in_label: false
     upgauging_min_percentile: 75
     departures_change_max_percentile: 50
 

@@ -2,6 +2,13 @@
 
 Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source of truth; this file condenses sections 2–8 and 12).
 
+**Assignment requirements (the bar for "done"):**
+- Deterministic scoring or ranking logic (not only LLM output).
+- A chat interface to talk with the agent (voice is a bonus).
+- Clearly communicate assumptions, uncertainty and scoping.
+- Deliverables: source code + a **short** design/architecture doc covering scoring methodology, key tradeoffs, and where/how AI is used.
+- Scoped for ~1 day: **clarity, reasoning and thoughtful design over completeness or polish.**
+
 **Thesis:** a terminal pays back per passenger. Good opportunity = many passengers + growing demand + demand pressing on capacity + nothing blocks expansion. Rank the opportunity **and** name the binding constraint.
 
 ## Principles (non-negotiable)
@@ -32,9 +39,11 @@ Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source 
 | Label | Rule |
 |---|---|
 | Regulatory | Hard **passenger** cap in `constraints.yaml` **and** passengers (A-07) ≥ 85% of it (A-12). Other caps/curfews are facts only, never triggers |
-| Airfield | Departures per *effective* runway ≥ p75 of peers (A-14), **or** NAS delay share ≥ p75 (reporting airlines only), **or** A-09 signature (up-gauging ≥ p75 **and** departures change vs 2019 ≤ p50), **or** a runway-geometry entry in `constraints.yaml` |
+| Airfield | Departures per *effective* runway ≥ p75 of peers (A-14), **or** NAS delay share ≥ p75 (reporting airlines only), **or** a runway-geometry entry in `constraints.yaml` |
 | Terminal | Growth ≥ p60 **and** Pressure ≥ p60 (A-13), and nothing above fired |
 | None evident | Otherwise |
+
+A-09 "up-gauging signature" (up-gauging ≥ p75 **and** departures change vs 2019 ≤ p50) is **display-only**: shown as a trace, never a trigger.
 
 Effective runway (A-15) = open **and** ≥ 5,000 ft. Close-parallel/crossing geometry lives in `constraints.yaml`, not code.
 
@@ -87,7 +96,7 @@ Layout: `sources/` (bts, faa, opensky, ourairports, cache) · `metrics.py` · `s
 
 - Unit tests for every metric with hand-computed fixtures.
 - Golden tests for the four questions: call tools directly (no LLM), assert structure + sanity ranges.
-- A-09 backtest: constrained (SFO, LGA, DCA, EWR, SNA) vs comparable unconstrained airports. If the signature doesn't separate them, drop it from the Airfield rule and report that.
+- A-09 backtest: constrained (SFO, LGA, DCA, EWR, SNA) vs comparable unconstrained airports. Report whether the signature separates them; it stays display-only either way.
 - Grounding check on every agent answer.
 - Eval set (~12 questions) in `tests/eval_questions.yaml`, end-to-end: the four questions, a follow-up, a weight what-if, an ambiguous name, an unsupported period, an unknown code, an unanswerable question. Pass = right tools, clean grounding, required caveats.
 
