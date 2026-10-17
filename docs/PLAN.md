@@ -40,11 +40,11 @@ score = 0.35 × Growth + 0.35 × Capacity Pressure + 0.30 × Scale
 |---|---|---|
 | Growth | Average of two percentiles: latest 12 months vs 2019 (recovery), and CAGR from 2022 to latest (momentum) | T-100 |
 | Capacity Pressure | Average of two percentiles: load factor (latest 12 months), and up-gauging = % change in seats per departure, latest 12 months vs 2019 | T-100 |
-| Scale | Percentile of enplanements over the latest 12 months | T-100 |
+| Scale | Percentile of enplanements over the latest 12 months, **ranked against all airports** (size is absolute) | T-100 |
 
 **Time windows (one rule everywhere):** "Latest 12 months" means the latest 12 published months, rolling. 2019 and 2022 mean calendar years. Every comparison is full year vs full year, so seasonality cancels out.
 
-- **Normalization:** each metric becomes a percentile within its **national** peer group (FAA hub class: large, medium, small, non-hub). Only after that do we filter by region.
+- **Normalization:** growth and pressure metrics become percentiles within their **national** peer group (FAA hub class: large, medium, small, non-hub); Scale is ranked against all airports, because size is absolute. Only after that do we filter by region.
   - Why: New England alone has too few airports to rank against each other.
   - Why percentile and not min-max: one giant airport (ATL) does not squash everyone else.
 - **No log of scale.** A percentile depends only on rank order, and log never changes rank order, so the log would be redundant.
@@ -61,7 +61,7 @@ Rules are checked in this order. The first one that matches wins.
 | Label | Rule | Meaning for the investor |
 |---|---|---|
 | **Regulatory** | A hard **passenger** cap exists in `constraints.yaml` **and** passengers (A-07) ≥ 85% of it. Other caps (daily departures, loading bridges, curfew) are shown as facts and do not trigger the label. | Money can't unlock it. Watch the legal or political timeline. |
-| **Airfield** | Departures per *effective* runway ≥ p75 of peer group (A-14), **or** NAS delay share ≥ p75 (reporting airlines only), **or** a runway-geometry entry exists in `constraints.yaml`. The A-09 up-gauging signature is shown as evidence but never triggers the label (decided before Phase 1: only measured or documented evidence fires a label). | A terminal adds no flights. The lever is gauge: widebody gates and bigger holdrooms. |
+| **Airfield** | NAS (runway/ATC) delay share ≥ p75 of peer group (A-14; reporting airlines only), **or** a runway-geometry entry exists in `constraints.yaml`. Departures per effective runway and the A-09 up-gauging signature are shown as evidence but never trigger the label (Phase 1: the OR rule fired for 40% of airports). | A terminal adds no flights. The lever is gauge: widebody gates and bigger holdrooms. |
 | **Terminal** | Growth ≥ p60 **and** Pressure ≥ p60 (A-13), and neither rule above fires | Best case for terminal capex. |
 | **None evident** | Otherwise | Demand isn't pressing on capacity yet. |
 
@@ -136,7 +136,7 @@ Each entry has: `id`, `statement`, `value`, `why`, `alternatives_considered`, `s
 | A-11 | ULCC flag threshold = __% of seats | Set in Phase 1 |
 | A-12 | Utilization trigger for the Regulatory label = 85% of the cap | Judgment |
 | A-13 | Terminal label needs Growth and Pressure ≥ p60 | Judgment. Recheck against the real distribution in Phase 1. |
-| A-14 | Airfield label triggers at ≥ p75 of departures per effective runway | Judgment. Same recheck. |
+| A-14 | Airfield label triggers at NAS delay share ≥ p75 of peers (or a geometry fact) | Measured evidence; catches SFO, LGA, EWR, DCA, BOS, JFK, ORD. Departures per runway is display-only. |
 | A-15 | Effective runway = open (not marked closed in OurAirports) **and** at least the minimum length in config (start: 5,000 ft). One OurAirports row = one runway. | Excludes closed and general-aviation-only strips. SNA's 5,700 ft runway must still count. The count stays crude on purpose: crossing or close-parallel geometry (SFO) is handled by a `constraints.yaml` entry, which fires the Airfield label directly. |
 | A-16 | T-100 segment passengers at origin are a proxy for enplanements | Segment data also counts through-passengers who stay on board, so it slightly overstates enplanements. It's the same bias for every airport, so the ranking holds. |
 | A-17 | "Portland", "Washington" and other ambiguous names trigger a clarifying question, never a guess | PWM vs PDX; DCA vs IAD vs BWI |

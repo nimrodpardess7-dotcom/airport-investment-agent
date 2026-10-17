@@ -18,7 +18,7 @@ scoring:
 
 constraint_label:
   regulatory_utilization: 0.85      # A-12: passengers (A-07) / hard passenger cap
-  airfield_percentile: 75           # A-14: departures per effective runway, within peer group
+  airfield_percentile: 75           # A-14: NAS delay share percentile, within peer group
   terminal_percentile: 60           # A-13: growth AND pressure, within peer group
   upgauging_signature:              # A-09 hypothesis: display-only, never triggers the label
     in_label: false

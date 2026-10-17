@@ -26,10 +26,10 @@ Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source 
 
 - **Growth** = mean of percentiles: latest-12-months vs 2019, and CAGR 2022→latest. (T-100)
 - **Capacity Pressure** = mean of percentiles: load factor (latest 12 months), and up-gauging = % change in seats per departure, latest 12 months vs 2019. (T-100)
-- **Scale** = percentile of enplanements over the latest 12 months. (T-100) No log (percentile is rank-only).
+- **Scale** = percentile of enplanements over the latest 12 months, **ranked against all airports** (size is absolute). (T-100) No log (percentile is rank-only).
 - **Time windows:** "latest 12 months" = latest 12 published months, rolling; 2019 and 2022 = calendar years. Always full year vs full year.
 - Universe: >10,000 enplanements (A-03) first, then FAA hub class by share of national enplanements (A-02: 1% / 0.25% / 0.05%), with a "borderline class" note near cutoffs. T-100 segment passengers proxy enplanements (A-16).
-- Percentiles are computed within the **national** peer group, *then* filtered by region.
+- Growth/pressure percentiles are computed within the **national** peer group; Scale nationally across all airports; *then* filtered by region.
 - Lenses: *absolute* (default weights), *pressure* (Scale 0, Growth 0.5, Pressure 0.5).
 - What-if weights from chat: session-only, validated (non-negative, normalized to 1), printed in every answer.
 - Congestion is **not** in the score; it feeds the constraint label.
@@ -39,11 +39,11 @@ Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source 
 | Label | Rule |
 |---|---|
 | Regulatory | Hard **passenger** cap in `constraints.yaml` **and** passengers (A-07) ≥ 85% of it (A-12). Other caps/curfews are facts only, never triggers |
-| Airfield | Departures per *effective* runway ≥ p75 of peers (A-14), **or** NAS delay share ≥ p75 (reporting airlines only), **or** a runway-geometry entry in `constraints.yaml` |
+| Airfield | NAS (runway/ATC) delay share ≥ p75 of peers (A-14; reporting airlines only), **or** a runway-geometry entry in `constraints.yaml` |
 | Terminal | Growth ≥ p60 **and** Pressure ≥ p60 (A-13), and nothing above fired |
 | None evident | Otherwise |
 
-A-09 "up-gauging signature" (up-gauging ≥ p75 **and** departures change vs 2019 ≤ p50) is **display-only**: shown as a trace, never a trigger.
+Display-only evidence (shown, never a trigger): departures per effective runway, and the A-09 "up-gauging signature" (up-gauging ≥ p75 **and** departures change vs 2019 ≤ p50).
 
 Effective runway (A-15) = open **and** ≥ 5,000 ft. Close-parallel/crossing geometry lives in `constraints.yaml`, not code.
 

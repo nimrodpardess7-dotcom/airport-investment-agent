@@ -131,11 +131,13 @@
   last_reviewed: null
 
 - id: A-14
-  statement: The Airfield label triggers at departures per effective runway >= p75 of peers.
+  statement: The Airfield label triggers when the NAS (runway/ATC) delay share is >= p75 of peers, or a runway-geometry fact exists in constraints.yaml.
   value: 75
-  why: Judgment.
-  alternatives_considered: null
-  sensitivity: Recheck against the real distribution in Phase 1.
+  why: NAS share is measured evidence that the airfield causes delays. It catches the known constrained airports (SFO, LGA, EWR, DCA, BOS, JFK, ORD).
+  alternatives_considered: >-
+    Departures per effective runway >= p75 OR NAS share (fired for 161 of 399 airports, too broad);
+    both must agree (30 airports, missed BOS, DCA, JFK, ORD). Departures per runway is now display-only.
+  sensitivity: Only reporting airlines file delay causes, so small airports can be Airfield only through a geometry fact.
   owner: Nimrod
   last_reviewed: null
 
