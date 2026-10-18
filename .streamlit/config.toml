@@ -1,0 +1,5 @@
+# Streamlit settings for the chat app.
+
+[client]
+# Hide Streamlit's own toolbar items (Deploy button, developer menu): not part of this app.
+toolbarMode = "minimal"
