@@ -99,10 +99,11 @@ def run_tool(name: str, args: dict) -> dict:
 
 # --- One conversation ------------------------------------------------------------------------------
 
-def _client(api_key: str | None = None) -> anthropic.Anthropic:
+def _client(api_key: str | None = None, workspace: str | None = None) -> anthropic.Anthropic:
     """Claude client. The key comes from `api_key` (e.g. typed in the app) or ANTHROPIC_API_KEY in .env.
-    ANTHROPIC_WORKSPACE_ID (optional, .env) is needed only for keys not scoped to a workspace."""
-    workspace = os.getenv("ANTHROPIC_WORKSPACE_ID")
+    A workspace ID (typed in the app, or ANTHROPIC_WORKSPACE_ID in .env) is needed only for keys that
+    aren't scoped to a workspace."""
+    workspace = workspace or os.getenv("ANTHROPIC_WORKSPACE_ID")
     return anthropic.Anthropic(api_key=api_key or None,
                                default_headers={"anthropic-workspace-id": workspace} if workspace else None)
 
@@ -139,8 +140,9 @@ def _add_usage(total: dict, response) -> None:
 class Agent:
     """One chat session. Keeps the full message history (session memory) and every tool result."""
 
-    def __init__(self, client: anthropic.Anthropic | None = None, api_key: str | None = None):
-        self.client = client or _client(api_key)
+    def __init__(self, client: anthropic.Anthropic | None = None, api_key: str | None = None,
+                 workspace: str | None = None):
+        self.client = client or _client(api_key, workspace)
         self.messages: list = []
         self.evidence: list[str] = []   # tool results + user messages, whole session (grounding check)
 

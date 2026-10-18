@@ -30,9 +30,14 @@ def active_key() -> str:
     return st.session_state.get("user_api_key", "").strip() or env_api_key()
 
 
+def active_workspace() -> str:
+    """Optional workspace ID typed in the sidebar (only for keys not scoped to a workspace); else .env."""
+    return st.session_state.get("user_workspace", "").strip()
+
+
 def new_conversation() -> None:
-    st.session_state.agent = Agent(api_key=active_key())
-    st.session_state.agent_key = active_key()
+    st.session_state.agent = Agent(api_key=active_key(), workspace=active_workspace() or None)
+    st.session_state.agent_key = (active_key(), active_workspace())
     st.session_state.history = []     # [{"role", "content", "turn", "seconds", "error"}]
     st.session_state.pending = None   # the question being answered; while set, every control is disabled
 
@@ -52,8 +57,8 @@ def api_error_message(e: anthropic.APIError) -> str:
     if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
         return "Anthropic rejected this API key. Check the key in the sidebar (or in .env) and ask again."
     if isinstance(e, anthropic.BadRequestError) and "workspace" in str(e).lower():
-        return ("This API key isn't tied to a workspace. Create a key inside a workspace in the Anthropic "
-                "Console, or set ANTHROPIC_WORKSPACE_ID in .env.")
+        return ("This API key isn't tied to a workspace. Paste your workspace ID (wrkspc_…) in the sidebar, "
+                "under the key. It's in the Anthropic Console under Settings > Workspaces.")
     if isinstance(e, anthropic.RateLimitError):
         return "Anthropic's rate limit was reached. Wait a moment and ask again."
     return f"The Claude API returned an error ({type(e).__name__}). Nothing was lost; please ask again."
@@ -82,8 +87,8 @@ def show_trust_panel(turn, seconds: float) -> None:
         st.caption(f"{seconds:.0f} s · ${turn.cost_usd:.3f} · stop: {turn.stop_reason}")
 
 
-if "agent" not in st.session_state or st.session_state.agent_key != active_key():
-    new_conversation()   # first visit, or a new key was entered
+if "agent" not in st.session_state or st.session_state.agent_key != (active_key(), active_workspace()):
+    new_conversation()   # first visit, or a new key / workspace was entered
 busy = st.session_state.pending is not None
 no_key = not active_key()
 
@@ -110,6 +115,9 @@ with st.sidebar:
         st.text_input("Anthropic API key", type="password", key="user_api_key", placeholder="sk-ant-…",
                       disabled=busy, help="Used only for this browser session. It is never saved, and is sent "
                                           "only to Anthropic. Get a key at console.anthropic.com.")
+        st.text_input("Workspace ID (only if your key needs one)", key="user_workspace", placeholder="wrkspc_…",
+                      disabled=busy, help="Only for keys that aren't scoped to a workspace. Find it in the "
+                                          "Anthropic Console under Settings > Workspaces. Session only, never saved.")
     st.button("New conversation", on_click=new_conversation, width="stretch", disabled=busy or no_key)
 
     st.subheader("Try a question")
