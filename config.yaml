@@ -1,5 +1,5 @@
 # Weights, thresholds and parameters. Every judgment value carries its A-ID from kb/assumptions.yaml.
-# See docs/PLAN.md section 3.
+# See docs/DESIGN.md (scoring).
 
 scoring:
   lenses:

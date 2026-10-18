@@ -1,6 +1,6 @@
 # Fix round report: answer quality (Q1, Q3, Q4)
 
-Outputs: [q1.md](q1.md), [q3.md](q3.md), [q4.md](q4.md). All three answers passed the grounding check with no flagged numbers. Total cost $0.20; 92 tests pass.
+Outputs (final run, all four brief questions): [q1.md](q1.md), [q2.md](q2.md), [q3.md](q3.md), [q4.md](q4.md). All passed the grounding check with no flagged numbers; 92 tests pass; end-to-end eval 8/8.
 
 ## Root cause of the "missing" airports (Q1)
 Not a scoring bug, and not A-03 or A-19. All 17 New England airports in the universe were evaluated, each with 12 of 12 months.

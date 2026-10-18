@@ -32,10 +32,10 @@
   turns: ["What percentage of flights out of Anchorage are long-haul?"]
   tools: [route_mix]
   must_include:
-    - "11\\.4%"                  # passenger aircraft, > 4,000 km
+    - "\\d+\\.\\d%"              # a long-haul percentage (exact value moves with the data window)
     - "4,000"                    # definition stated
     - "freight|cargo"            # passenger vs cargo split
-    - "2025"                     # data window stated
+    - "2025-05|2026-04|12 months"   # data window stated (A-26: same 12 months as the scores)
 
 - id: q4_sfo_unmet_demand
   turns: ["SFO seems to have unmet demand. How much, and why?"]

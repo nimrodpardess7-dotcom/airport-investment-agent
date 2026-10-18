@@ -1,3 +1,5 @@
+> **History:** this is the original build plan, kept to show the process. Some decisions changed during the build (e.g. the terminal-only framing, the cargo method, the Airfield rule). **The current design is [../DESIGN.md](../DESIGN.md).**
+
 # Airport Investment Intelligence Agent: Plan v2
 
 Deloitte Digital, Forward Deployed Engineer home assignment. Deadline: Sunday, Oct 18, 2026. Submission: public GitHub repo.

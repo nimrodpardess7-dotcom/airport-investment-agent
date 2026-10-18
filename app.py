@@ -92,6 +92,14 @@ def month(ym: str) -> str:
     return pd.Period(ym, "M").strftime("%b %Y")   # "2025-05" -> "May 2025"
 
 
+# --- First load ------------------------------------------------------------------------------------
+# Building the airport table downloads public data on a cold cache (about a minute). Say so in the
+# main area, so the first screen never looks broken; the cached table makes later loads instant.
+if tools._table.cache_info().currsize == 0:          # nothing loaded in this server process yet
+    with st.spinner("First run: downloading public aviation data (about 1 minute). After this it's instant."):
+        tools._table()
+meta = tools._table()[1]
+
 # --- Sidebar ---------------------------------------------------------------------------------------
 with st.sidebar:
     st.title("✈️ Airport Investment Agent")
@@ -109,8 +117,6 @@ with st.sidebar:
         st.button(label, on_click=ask, args=(question,), width="stretch", disabled=busy or no_key)
 
     st.subheader("Data used")
-    with st.spinner("Loading data…"):
-        meta = tools._table()[1]
     (s, e), (ns, ne) = meta["score_period"], meta["nas_period"]
     st.caption("The same data behind every answer:")
     st.markdown(

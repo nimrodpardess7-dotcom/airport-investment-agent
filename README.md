@@ -47,7 +47,11 @@ python -m pytest                   # 92 tests
 
 The first run downloads public data (about 1–2 minutes); after that it's cached.
 
-## More
+## What to read
 
-- How the score works, the tradeoffs and the limits: [docs/DESIGN.md](docs/DESIGN.md)
-- Example answers to the brief's questions: [docs/eval_outputs/](docs/eval_outputs/)
+1. **[docs/DESIGN.md](docs/DESIGN.md)**: scoring, tradeoffs, where AI is used, limits (the design document).
+2. **[docs/eval_outputs/](docs/eval_outputs/)**: the agent's real answers to the four brief questions.
+3. **[docs/eval_results.md](docs/eval_results.md)**: end-to-end eval, 8 cases graded in code.
+4. [config.yaml](config.yaml) and [kb/](kb/): every weight, threshold, fact and assumption, editable.
+
+History (how it was built, not the current design): [docs/history/](docs/history/) holds the original plan and the data-source checks. `CLAUDE.md` holds the instructions for the AI coding assistant used during the build.

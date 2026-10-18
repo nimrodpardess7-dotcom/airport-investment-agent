@@ -1,6 +1,6 @@
 """Bureau of Transportation Statistics (BTS). No API keys.
 
-Three feeds, each with one job (decisions D1-D3 in docs/phase0_findings.md):
+Three feeds, each with one job (decisions D1-D3 in docs/history/phase0_findings.md):
 
 1. Socrata T-100 Segment Summary by Origin Airport (r495-tyji): powers the score.
    One row per airport per month. Freighters are mixed into departures.

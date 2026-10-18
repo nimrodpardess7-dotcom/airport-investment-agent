@@ -1,3 +1,5 @@
+> **History:** data-source checks and decisions (D1–D5) made before the build. **The current design is [../DESIGN.md](../DESIGN.md).**
+
 # Phase 0 findings
 
 Run on 2026-10-15/16. Each source has a probe script in `scripts/phase0/`; raw results are saved to `.cache/phase0/*.json` (gitignored).

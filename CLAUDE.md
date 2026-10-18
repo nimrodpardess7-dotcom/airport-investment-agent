@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Airport Investment Intelligence Agent. Full spec: `docs/PLAN.md` (single source of truth; this file condenses sections 2–8 and 12).
+Airport Investment Intelligence Agent. Current design: `docs/DESIGN.md`. Original plan (history): `docs/history/PLAN.md`.
 
 **Assignment requirements (the bar for "done"):**
 - Deterministic scoring or ranking logic (not only LLM output).
@@ -61,7 +61,7 @@ Effective runway (A-15) = open **and** ≥ 5,000 ft. Close-parallel/crossing geo
 | OurAirports CSV | State, coordinates, runways |
 
 - Live calls + local TTL cache in `.cache/`. Aggregate Socrata server-side with SoQL; never pull millions of rows.
-- Phase 0 results and decisions D1–D5: `docs/phase0_findings.md`.
+- Phase 0 results and decisions D1–D5: `docs/history/phase0_findings.md`.
 - Known gaps (state them in answers): no gate counts or terminal sq ft ("demand is pressing", never "terminal is full"); no live route-level API; T-100 lags a few months; no fares.
 
 **Period → source routing** (in `routing.py`): last 7 days → OpenSky (all flights); month/season/year → TranStats route-level; specific past day / anything else → unsupported, offer nearest period.
