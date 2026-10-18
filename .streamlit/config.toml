@@ -3,3 +3,7 @@
 [client]
 # Hide Streamlit's own toolbar items (Deploy button, developer menu): not part of this app.
 toolbarMode = "minimal"
+
+[theme]
+# Always dark, whatever the viewer's system setting.
+base = "dark"

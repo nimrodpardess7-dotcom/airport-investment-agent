@@ -18,34 +18,25 @@ Ask in plain English, for example *"Which New England airports are strong candid
 
 The AI (Claude) never calculates. Python computes every number from public U.S. government data, and Claude only explains it. After each answer, a check confirms that every number came from the data.
 
-## For reviewers (about 5 minutes)
+## For reviewers (3 commands)
 
 Requires Python 3.11 or newer.
 
-**1. Install**
 ```bash
 git clone https://github.com/nimrodpardess7-dotcom/airport-investment-agent.git
 cd airport-investment-agent
-python -m venv .venv
-.venv\Scripts\activate          # Mac/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+.\run.bat                                     # Mac/Linux: ./run.sh
 ```
 
-**2. Run the chat**
+The script sets everything up on the first run (about 2–3 minutes, including a one-time download of public data) and opens the chat at http://localhost:8501.
+
+The agent is live, so it needs an Anthropic API key: **paste yours in the sidebar.** It's used only for that browser session and never saved. Each answer costs about $0.05. Then click one of the four example questions, or ask your own. Follow-ups work ("and Hartford?", "what if growth matters twice as much?").
+
+**No key? The scoring still runs**, computed in Python with no AI:
 ```bash
-streamlit run app.py            # opens http://localhost:8501
+.venv\Scripts\python scripts/four_questions.py    # Mac/Linux: .venv/bin/python
+.venv\Scripts\python -m pytest                    # 92 tests
 ```
-The agent is live, so it needs an Anthropic API key. **Paste yours in the sidebar.** It's used only for that browser session and never saved. (Or put it in a `.env` file: copy `.env.example` and fill in `ANTHROPIC_API_KEY`.) Each answer costs about $0.05.
-
-Then click one of the four example questions, or ask your own. Follow-ups work ("and Hartford?", "what if growth matters twice as much?").
-
-**3. No key? The scoring still runs**
-```bash
-python scripts/four_questions.py   # the four questions, computed in Python, no AI
-python -m pytest                   # 92 tests
-```
-
-The first run downloads public data (about 1–2 minutes); after that it's cached.
 
 ## What to read
 
