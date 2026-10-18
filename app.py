@@ -13,20 +13,26 @@ import streamlit as st
 
 import grounding
 import tools
-from agent import Agent
+from agent import Agent, env_api_key
 
 st.set_page_config(page_title="Airport Investment Agent", page_icon="✈️", layout="wide")
 
 EXAMPLES = {
-    "New England terminal candidates": "Which airports in New England are the best candidates for new terminal investment?",
-    "LAX vs Santa Ana congestion": "Compare congestion at LAX and Santa Ana. What kind of constraint does each face?",
-    "Anchorage long-haul share": "What percentage of flights out of Anchorage are long-haul?",
-    "SFO unmet demand": "SFO seems to have unmet demand. How much, and why?",
+    "New England expansion candidates": "Which airports in New England are strong candidates for terminal expansion?",
+    "LAX vs Santa Ana congestion": "Compare LA and Santa Ana airport congestion levels.",
+    "Anchorage long-haul share": "What is the percentage of long haul flights out of Anchorage airport?",
+    "SFO unmet demand": "What is the unmet flight demand in SFO airport and why?",
 }
 
 
+def active_key() -> str:
+    """The key typed in the sidebar (this browser session only, never saved), else ANTHROPIC_API_KEY from .env."""
+    return st.session_state.get("user_api_key", "").strip() or env_api_key()
+
+
 def new_conversation() -> None:
-    st.session_state.agent = Agent()
+    st.session_state.agent = Agent(api_key=active_key())
+    st.session_state.agent_key = active_key()
     st.session_state.history = []     # [{"role", "content", "turn", "seconds", "error"}]
     st.session_state.pending = None   # the question being answered; while set, every control is disabled
 
@@ -39,6 +45,18 @@ def ask(question: str) -> None:
 
 def submit_chat() -> None:
     ask(st.session_state.chat_box)
+
+
+def api_error_message(e: anthropic.APIError) -> str:
+    """Plain-language message for the API errors a reviewer is most likely to hit."""
+    if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+        return "Anthropic rejected this API key. Check the key in the sidebar (or in .env) and ask again."
+    if isinstance(e, anthropic.BadRequestError) and "workspace" in str(e).lower():
+        return ("This API key isn't tied to a workspace. Create a key inside a workspace in the Anthropic "
+                "Console, or set ANTHROPIC_WORKSPACE_ID in .env.")
+    if isinstance(e, anthropic.RateLimitError):
+        return "Anthropic's rate limit was reached. Wait a moment and ask again."
+    return f"The Claude API returned an error ({type(e).__name__}). Nothing was lost; please ask again."
 
 
 def show_markdown(text: str) -> None:
@@ -64,9 +82,10 @@ def show_trust_panel(turn, seconds: float) -> None:
         st.caption(f"{seconds:.0f} s · ${turn.cost_usd:.3f} · stop: {turn.stop_reason}")
 
 
-if "agent" not in st.session_state:
-    new_conversation()
+if "agent" not in st.session_state or st.session_state.agent_key != active_key():
+    new_conversation()   # first visit, or a new key was entered
 busy = st.session_state.pending is not None
+no_key = not active_key()
 
 
 def month(ym: str) -> str:
@@ -76,12 +95,18 @@ def month(ym: str) -> str:
 # --- Sidebar ---------------------------------------------------------------------------------------
 with st.sidebar:
     st.title("✈️ Airport Investment Agent")
-    st.write("Find U.S. airports where new terminal capacity would pay off, and see what blocks growth.")
-    st.button("New conversation", on_click=new_conversation, width="stretch", disabled=busy)
+    st.write("Find U.S. airports where modernization would add the most flight and passenger capacity, and see what to invest in: terminal, airfield, or neither.")
+    if env_api_key():
+        st.caption("🔑 Using the Anthropic API key from .env")
+    else:
+        st.text_input("Anthropic API key", type="password", key="user_api_key", placeholder="sk-ant-…",
+                      disabled=busy, help="Used only for this browser session. It is never saved, and is sent "
+                                          "only to Anthropic. Get a key at console.anthropic.com.")
+    st.button("New conversation", on_click=new_conversation, width="stretch", disabled=busy or no_key)
 
     st.subheader("Try a question")
     for label, question in EXAMPLES.items():
-        st.button(label, on_click=ask, args=(question,), width="stretch", disabled=busy)
+        st.button(label, on_click=ask, args=(question,), width="stretch", disabled=busy or no_key)
 
     st.subheader("Data used")
     with st.spinner("Loading data…"):
@@ -104,7 +129,11 @@ with st.sidebar:
             "`[assumption]` = a judgment call you can question.")
 
 # --- Chat ------------------------------------------------------------------------------------------
-st.header("Ask about U.S. airport terminal investment")
+st.header("Ask about U.S. airport investment opportunities")
+if no_key:
+    st.info("**To start, add an Anthropic API key.** Paste it in the sidebar (used for this session only, "
+            "never saved), or put it in a `.env` file as `ANTHROPIC_API_KEY=...`. "
+            "Get a key at [console.anthropic.com](https://console.anthropic.com).")
 
 for msg in st.session_state.history:
     with st.chat_message(msg["role"]):
@@ -115,8 +144,9 @@ for msg in st.session_state.history:
         if msg.get("turn"):
             show_trust_panel(msg["turn"], msg["seconds"])
 
-st.chat_input("Answering…" if busy else "e.g. Which New England airports should we invest in?",
-              key="chat_box", on_submit=submit_chat, disabled=busy)
+placeholder = ("Add an Anthropic API key in the sidebar to start" if no_key else
+               "Answering…" if busy else "e.g. Which New England airports should we invest in?")
+st.chat_input(placeholder, key="chat_box", on_submit=submit_chat, disabled=busy or no_key)
 
 # Answer the queued question. Controls above are already disabled, so a click can't interrupt it.
 # If something still interrupts the run, Agent.ask rolls the turn back and `finally` unlocks the UI.
@@ -131,9 +161,7 @@ if busy:
                 turn = st.session_state.agent.ask(question)
                 reply = {"role": "assistant", "content": turn.answer, "turn": turn, "seconds": time.time() - t0}
             except anthropic.APIError as e:
-                reply = {"role": "assistant", "error": True,
-                         "content": f"The Claude API returned an error ({type(e).__name__}). "
-                                    "Nothing was lost; please ask again."}
+                reply = {"role": "assistant", "error": True, "content": api_error_message(e)}
         st.session_state.history += [{"role": "user", "content": question}, reply]
     finally:
         st.session_state.pending = None
