@@ -116,16 +116,17 @@ with st.sidebar:
     for label, question in EXAMPLES.items():
         st.button(label, on_click=ask, args=(question,), width="stretch", disabled=busy or no_key)
 
-    st.subheader("Data used")
+    st.divider()
     (s, e), (ns, ne) = meta["score_period"], meta["nas_period"]
-    st.caption("The same data behind every answer:")
-    st.markdown(
-        f"- **Traffic and scores:** {month(s)} – {month(e)}, compared with 2019 and 2022\n"
-        f"- **Delay causes:** {month(ns)} – {month(ne)}\n"
-        f"- **Passenger vs cargo flights:** {meta['freighter_year']}\n"
-        f"- **Live:** FAA delays right now; flights in the last 7 days\n"
-        f"- **{meta['airports_in_universe']} U.S. airports** scored")
-    st.caption("Sources: U.S. DOT (BTS), FAA, OpenSky Network, OurAirports")
+    st.caption(f"Data through {month(e)} · {meta['airports_in_universe']} U.S. airports")
+    with st.expander("About the data"):
+        st.markdown(
+            "The same data is behind every answer:\n"
+            f"- **Traffic and scores:** {month(s)} – {month(e)}, compared with 2019 and 2022\n"
+            f"- **Delay causes:** {month(ns)} – {month(ne)}\n"
+            f"- **Airline and cargo mix (for flags):** calendar {meta['freighter_year']}\n"
+            f"- **Live:** FAA delays right now; flights in the last 7 days\n\n"
+            "Sources: U.S. DOT (BTS), FAA, OpenSky Network, OurAirports")
 
     with st.expander("How it works"):
         st.markdown(
